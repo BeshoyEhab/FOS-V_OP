@@ -3,7 +3,7 @@
     {
       "name": "linux-gcc-x64",
       "includePath": ["${workspaceFolder}/**"],
-      "compilerPath": "C:\\MinGW\\bin\\gcc.exe", // yor compiler path : for windows make it \\usr\\bin...
+      "compilerPath": "/usr/bin/gcc",
       "cStandard": "${default}",
       "cppStandard": "${default}",
       "intelliSenseMode": "linux-gcc-x64",
