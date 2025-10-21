@@ -80,7 +80,7 @@ uint32 last_eip = 0;
 uint32 before_last_eip = 0;
 uint32 last_fault_va = 0;
 uint32 before_last_fault_va = 0;
-int8 num_repeated_fault  = 0;
+uint8 num_repeated_fault  = 0;
 extern uint32 sys_calculate_free_frames() ;
 
 struct Env* last_faulted_env = NULL;
