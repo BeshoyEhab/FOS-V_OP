@@ -2,16 +2,12 @@
   "configurations": [
     {
       "name": "linux-gcc-x64",
-      "includePath": [
-        "${workspaceFolder}/**"
-      ],
-      "compilerPath": "/usr/bin/gcc",
+      "includePath": ["${workspaceFolder}/**"],
+      "compilerPath": "C:\\MinGW\\bin\\gcc.exe", // yor compiler path : for windows make it \\usr\\bin...
       "cStandard": "${default}",
       "cppStandard": "${default}",
       "intelliSenseMode": "linux-gcc-x64",
-      "compilerArgs": [
-        ""
-      ]
+      "compilerArgs": [""]
     }
   ],
   "version": 4
