@@ -25,6 +25,12 @@ __inline__ uint32 to_page_va(struct PageInfoElement *ptrPageInfo)
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
 
+static inline int ILog2(uint32 x){
+	int r = -1;
+	while(x){r++;x>>=1;}
+	return r;
+}
+
 //==================================
 // [1] INITIALIZE DYNAMIC ALLOCATOR:
 //==================================
@@ -44,7 +50,11 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	//Your code is here
 
 	//initialize the page info arr & block list
+	dynAllocStart = daStart;
+	dynAllocEnd = daEnd;
+
 	int NumOfPages = (daEnd - daStart) / PAGE_SIZE;
+
 	LIST_INIT(&freePagesList);
 
 	for (int i=0; i<= LOG2_MAX_SIZE - LOG2_MIN_SIZE; i++){
@@ -104,21 +114,43 @@ void *alloc_block(uint32 size)
 	while(block_size < size){block_size <<= 1;}
 
 
-	int Index = log2(size) - LOG2_MIN_SIZE;
+	int Index = ILog2(size) - LOG2_MIN_SIZE;
+	if(index < 0 || index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE)){
+		return NULL;
+	}
 
 	//If list empty --> allocate a new page
 	if (LIST_EMPTY(&freeBlockLists[index])){
-		void *Page_va = (void*)dynAllocStart;
 
-		for(int i =0; i<(dynAllocEnd - dynAllocStart)/PAGE_SIZE; i++){
-			if(pageBlockInfoArr[i].block_size==0){
-				Page_va = (void*)(dynAllocStart + i * PAGE_SIZE);
-				get_page(Page_va); //physical
-				pageBlockInfoArr[i].block_size = block_size;
-				pageBlockInfoArr[i].num_of_free_blocks = PAGE_SIZE / block_size;
-				break;
-			}
+		struct PageInfoElement *PInfo = LIST_FIRST(&freePagesList);
+		if(PInfo == NULL){
+			panic("alloc_block: no free page available");
+			return NULL;
 		}
+
+		LIST_REMOVE(PInfo, prev_next_info);
+
+		uint32 page_idx = PInfo - pageBlockInfoArr;
+		void *Page_va = (void*)(dynAllocStart+(page_idx <<PGSHIFT));
+
+		if(get_page(Page_va) < 0){
+			LIST_INSERT_HEAD(&freePagesList,PInfo,prev_next_info);
+			return NULL;
+		}
+
+		PInfo->block_size = block_size;
+		PInfo->num_of_free_blocks = PAGE_SIZE/block_size;
+
+		// for(int i =0; i<(dynAllocEnd - dynAllocStart)/PAGE_SIZE; i++){
+		// 	if(pageBlockInfoArr[i].block_size==0){
+		// 		Page_va = (void*)(dynAllocStart + i * PAGE_SIZE);
+		// 		get_page(Page_va); //physical
+		// 		pageBlockInfoArr[i].block_size = block_size;
+		// 		pageBlockInfoArr[i].num_of_free_blocks = PAGE_SIZE / block_size;
+		// 		break;
+		// 	}
+		// }
+
 
 		//divide page into blocks + add to the list
 		for(uint32 OFST = 0; OFST < PAGE_SIZE; OFST += block_size){
@@ -129,6 +161,10 @@ void *alloc_block(uint32 size)
 
 	//get first free block
 	struct BlockElement *block = LIST_FIRST(&freeBlockLists[index]);
+	if (block == NULL){
+        panic("alloc_block: expected non-empty list but got empty");
+        return NULL;		
+	}
 	LIST_REMOVE(block,prev_next_info);
 
 	//fint the index of the page + make decrement
@@ -164,10 +200,17 @@ void free_block(void *va)
 	uint32 addr = (uint32)va;
 	uint32 Page_Index = (addr - dynAllocStart)/PAGE_SIZE;
 	struct PageInfoElement *PageInfo = &pageBlockInfoArr[Page_Index];
+
 	uint32 block_size = PageInfo->block_size;
-	int index = log2(block_size) - LOG2_MIN_SIZE;
+	    if (block_size == 0) {
+        panic("free_block: page has block_size == 0");
+        return;
+    }
+
+	int index = ILog2(block_size) - LOG2_MIN_SIZE;
 
 	struct BlockElement *block = (struct BlockElement*)va;
+
 	LIST_INSERT_HEAD(&freeBlockLists[index],block,prev_next_info);
 
 	PageInfo->num_of_free_blocks++;
@@ -175,21 +218,23 @@ void free_block(void *va)
 	//handling after the all the page became free return it back to page
 	if(PageInfo->num_of_free_blocks == PAGE_SIZE/block_size){
 		//rm all blks
-		struct BlockElement *blk;
-		LIST_FOREACH(blk, &freeBlockLists[index], prev_next_info){
+		struct BlockElement *blk = LIST_FIRST(&freeBlockLists[index]);
+		while(blk){
+			struct BlockElement *next = LIST_NEXT(blk,prev_next_info);
 			uint32 Blk_Page_Index = ((uint32)blk - dynAllocStart)/PAGE_SIZE;
 			if(Blk_Page_Index == Page_Index){
 				LIST_REMOVE(blk,prev_next_info);
 			}
+			blk = next;
 		}
 
-		return_page((void*)(dynAllocStart + Page_Index + PAGE_SIZE));
+		void *Page_va = (void*)(dynAllocStart + (Page_Index << PGSHIFT));
+		return_page(Page_va);
+
 		PageInfo->block_size = 0;
 		PageInfo->num_of_free_blocks = 0;
+		LIST_INSERT_HEAD(&freePagesList, PageInfo, prev_next_info);
 	}
-
-
-
 	//Comment the following line
 	//panic("free_block() Not implemented yet");
 }
