@@ -114,7 +114,8 @@ void *alloc_block(uint32 size)
 	while(block_size < size){block_size <<= 1;}
 
 
-	int index = ILog2(size) - LOG2_MIN_SIZE;
+	int index = ILog2(block_size) - LOG2_MIN_SIZE;
+
 	if(index < 0 || index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE)){
 		return NULL;
 	}
@@ -123,6 +124,7 @@ void *alloc_block(uint32 size)
 	if (LIST_EMPTY(&freeBlockLists[index])){
 
 		struct PageInfoElement *PInfo = LIST_FIRST(&freePagesList);
+		
 		if(PInfo == NULL){
 			panic("alloc_block: no free page available");
 			return NULL;
@@ -141,17 +143,6 @@ void *alloc_block(uint32 size)
 		PInfo->block_size = block_size;
 		PInfo->num_of_free_blocks = PAGE_SIZE/block_size;
 
-		// for(int i =0; i<(dynAllocEnd - dynAllocStart)/PAGE_SIZE; i++){
-		// 	if(pageBlockInfoArr[i].block_size==0){
-		// 		Page_va = (void*)(dynAllocStart + i * PAGE_SIZE);
-		// 		get_page(Page_va); //physical
-		// 		pageBlockInfoArr[i].block_size = block_size;
-		// 		pageBlockInfoArr[i].num_of_free_blocks = PAGE_SIZE / block_size;
-		// 		break;
-		// 	}
-		// }
-
-
 		//divide page into blocks + add to the list
 		for(uint32 OFST = 0; OFST < PAGE_SIZE; OFST += block_size){
 			struct BlockElement *blk = (struct BlockElement *)((uint8*)Page_va + OFST);
@@ -161,11 +152,12 @@ void *alloc_block(uint32 size)
 
 	//get first free block
 	struct BlockElement *block = LIST_FIRST(&freeBlockLists[index]);
+
 	if (block == NULL){
         panic("alloc_block: expected non-empty list but got empty");
         return NULL;		
 	}
-	LIST_REMOVE(block,prev_next_info);
+	LIST_REMOVE(&freeBlockLists[index],block);
 
 	//fint the index of the page + make decrement
 	uint32 Page_Index = ((uint32)block - dynAllocStart)/PAGE_SIZE;
@@ -202,7 +194,7 @@ void free_block(void *va)
 	struct PageInfoElement *PageInfo = &pageBlockInfoArr[Page_Index];
 
 	uint32 block_size = PageInfo->block_size;
-	    if (block_size == 0) {
+	if (block_size == 0) {
         panic("free_block: page has block_size == 0");
         return;
     }
@@ -212,7 +204,7 @@ void free_block(void *va)
 	struct BlockElement *block = (struct BlockElement*)va;
 
 	LIST_INSERT_HEAD(&freeBlockLists[index],block,prev_next_info);
-
+	
 	PageInfo->num_of_free_blocks++;
 
 	//handling after the all the page became free return it back to page
