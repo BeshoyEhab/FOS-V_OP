@@ -14,12 +14,13 @@
 //==============================================
 // [1] INITIALIZE KERNEL HEAP:
 //==============================================
-//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #0 kheap_init [GIVEN]
-//Remember to initialize locks (if any)
+// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #0 kheap_init [GIVEN]
+// Remember to initialize locks (if any)
+struct kspinlock allocate_lock;
 void kheap_init()
 {
 	//==================================================================================
-	//DON'T CHANGE THESE LINES==========================================================
+	// DON'T CHANGE THESE LINES==========================================================
 	//==================================================================================
 	{
 		initialize_dynamic_allocator(KERNEL_HEAP_START, KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE);
@@ -29,12 +30,13 @@ void kheap_init()
 	}
 	//==================================================================================
 	//==================================================================================
+	init_kspinlock(&allocate_lock, "Block Allocator Lock");
 }
 
 //==============================================
 // [2] GET A PAGE FROM THE KERNEL FOR DA:
 //==============================================
-int get_page(void* va)
+int get_page(void *va)
 {
 	int ret = alloc_page(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE), PERM_WRITEABLE, 1);
 	if (ret < 0)
@@ -45,7 +47,7 @@ int get_page(void* va)
 //==============================================
 // [3] RETURN A PAGE FROM THE DA TO KERNEL:
 //==============================================
-void return_page(void* va)
+void return_page(void *va)
 {
 	unmap_frame(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE));
 }
@@ -53,27 +55,68 @@ void return_page(void* va)
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
+
 //===================================
 // [1] ALLOCATE SPACE IN KERNEL HEAP:
 //===================================
-void* kmalloc(unsigned int size)
+void *kmalloc(unsigned int size)
 {
-	//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
-	//Your code is here
-	//Comment the following line
-	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
+	// Your code is here
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
+	{
+		// we need to make lock while allocation
 
-	//TODO: [PROJECT'25.BONUS#3] FAST PAGE ALLOCATOR
+		bool lock_is_in_hold = holding_kspinlock(&allocate_lock); // that return 0 if if free
+		if (!lock_is_in_hold)
+			acquire_kspinlock(&allocate_lock);
+
+		void *va = alloc_block(size);
+		release_kspinlock(&allocate_lock);
+
+		if (va != NULL)
+			return va;
+		else
+			return NULL;
+	}
+	else
+	{
+		bool lock_is_in_hold = holding_kspinlock(&MemFrameLists.mfllock); //
+
+		uint32 number_of_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
+		if (!lock_is_in_hold)
+			acquire_kspinlock(&MemFrameLists.mfllock);
+
+		uint32 start_va = ROUNDUP(kheapPageAllocBreak, PAGE_SIZE);
+		uint32 end_va = start_va + number_of_pages * PAGE_SIZE;
+
+		if (end_va > KERNEL_HEAP_MAX)
+		{
+			release_kspinlock(&MemFrameLists.mfllock);
+			return NULL;
+		}
+		release_kspinlock(&MemFrameLists.mfllock);
+		return (void *)start_va;
+		// the code to allocate pages
+	}
+
+	// return NULL if it failer to allocate
+	return NULL;
+
+	// Comment the following line
+	// kpanic_into_prompt("kmalloc() is not implemented yet...!!");
+
+	// TODO: [PROJECT'25.BONUS#3] FAST PAGE ALLOCATOR
 }
 
 //=================================
 // [2] FREE SPACE FROM KERNEL HEAP:
 //=================================
-void kfree(void* virtual_address)
+void kfree(void *virtual_address)
 {
-	//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #2 kfree
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #2 kfree
+	// Your code is here
+	// Comment the following line
 	panic("kfree() is not implemented yet...!!");
 }
 
@@ -82,9 +125,9 @@ void kfree(void* virtual_address)
 //=================================
 unsigned int kheap_virtual_address(unsigned int physical_address)
 {
-	//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #3 kheap_virtual_address
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #3 kheap_virtual_address
+	// Your code is here
+	// Comment the following line
 	panic("kheap_virtual_address() is not implemented yet...!!");
 
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
@@ -95,9 +138,9 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 //=================================
 unsigned int kheap_physical_address(unsigned int virtual_address)
 {
-	//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
+	// Your code is here
+	// Comment the following line
 	panic("kheap_physical_address() is not implemented yet...!!");
 
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
@@ -120,8 +163,8 @@ extern __inline__ uint32 get_block_size(void *va);
 
 void *krealloc(void *virtual_address, uint32 new_size)
 {
-	//TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - krealloc
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - krealloc
+	// Your code is here
+	// Comment the following line
 	panic("krealloc() is not implemented yet...!!");
 }
