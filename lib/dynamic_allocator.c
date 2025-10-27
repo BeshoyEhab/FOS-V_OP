@@ -64,7 +64,7 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	for (int i=0; i<NumOfPages; i++){
 		pageBlockInfoArr[i].block_size =0;
 		pageBlockInfoArr[i].num_of_free_blocks =0;
-		LIST_INSERT_HEAD(&freePagesList, &pageBlockInfoArr[i], prev_next_info);
+		LIST_INSERT_HEAD(&freePagesList, &pageBlockInfoArr[i]);
 	}
 
 	//Comment the following line
@@ -130,13 +130,13 @@ void *alloc_block(uint32 size)
 			return NULL;
 		}
 
-		LIST_REMOVE(PInfo, prev_next_info);
+		LIST_REMOVE(&freePagesList, PInfo);
 
 		uint32 page_idx = PInfo - pageBlockInfoArr;
 		void *Page_va = (void*)(dynAllocStart+(page_idx <<PGSHIFT));
 
 		if(get_page(Page_va) < 0){
-			LIST_INSERT_HEAD(&freePagesList,PInfo,prev_next_info);
+			LIST_INSERT_HEAD(&freePagesList,PInfo);
 			return NULL;
 		}
 
@@ -146,7 +146,7 @@ void *alloc_block(uint32 size)
 		//divide page into blocks + add to the list
 		for(uint32 OFST = 0; OFST < PAGE_SIZE; OFST += block_size){
 			struct BlockElement *blk = (struct BlockElement *)((uint8*)Page_va + OFST);
-			LIST_INSERT_HEAD(&freeBlockLists[index],blk,prev_next_info);
+			LIST_INSERT_HEAD(&freeBlockLists[index],blk);
 		}
 	}
 
@@ -203,7 +203,7 @@ void free_block(void *va)
 
 	struct BlockElement *block = (struct BlockElement*)va;
 
-	LIST_INSERT_HEAD(&freeBlockLists[index],block,prev_next_info);
+	LIST_INSERT_HEAD(&freeBlockLists[index],block);
 	
 	PageInfo->num_of_free_blocks++;
 
@@ -212,10 +212,10 @@ void free_block(void *va)
 		//rm all blks
 		struct BlockElement *blk = LIST_FIRST(&freeBlockLists[index]);
 		while(blk){
-			struct BlockElement *next = LIST_NEXT(blk,prev_next_info);
+			struct BlockElement *next = LIST_NEXT(blk);
 			uint32 Blk_Page_Index = ((uint32)blk - dynAllocStart)/PAGE_SIZE;
 			if(Blk_Page_Index == Page_Index){
-				LIST_REMOVE(blk,prev_next_info);
+				LIST_REMOVE(&freeBlockLists[index], blk);
 			}
 			blk = next;
 		}
@@ -225,7 +225,7 @@ void free_block(void *va)
 
 		PageInfo->block_size = 0;
 		PageInfo->num_of_free_blocks = 0;
-		LIST_INSERT_HEAD(&freePagesList, PageInfo, prev_next_info);
+		LIST_INSERT_HEAD(&freePagesList, PageInfo);
 	}
 	//Comment the following line
 	//panic("free_block() Not implemented yet");
