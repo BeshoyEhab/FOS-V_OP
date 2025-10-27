@@ -114,7 +114,7 @@ void *alloc_block(uint32 size)
 	while(block_size < size){block_size <<= 1;}
 
 
-	int Index = ILog2(size) - LOG2_MIN_SIZE;
+	int index = ILog2(size) - LOG2_MIN_SIZE;
 	if(index < 0 || index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE)){
 		return NULL;
 	}
