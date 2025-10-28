@@ -116,30 +116,21 @@ void *alloc_block(uint32 size)
 
 	int index = ILog2(block_size) - LOG2_MIN_SIZE;
 
-	//get first free block
-	struct BlockElement *block = LIST_FIRST(&freeBlockLists[index]);
-
-
 	if(index < 0 || index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE)){
 		panic("alloc_block: Only god knows how this value became like that !!");
 		return NULL;
 	}
 
-	//If list empty --> allocate a new page
-	if (LIST_EMPTY(&freeBlockLists[index])){
+	//init block
+	struct BlockElement *block = NULL;
 
+	if (!LIST_EMPTY(&freeBlockLists[index])){
+
+		block = LIST_FIRST(&freeBlockLists[index]);
+        LIST_REMOVE(&freeBlockLists[index], block);
+	
+	} else if (!LIST_EMPTY(&freePagesList)) {
 		struct PageInfoElement *PInfo = LIST_FIRST(&freePagesList);
-		
-		int tmp = index + 1;
-		while(tmp <= (LOG2_MAX_SIZE-LOG2_MIN_SIZE) && LIST_EMPTY(&freeBlockLists[tmp])){tmp++}
-
-		if(tmp <= (LOG2_MAX_SIZE-LOG2_MIN_SIZE)){
-			block = LIST_FIRST(&freeBlockLists[tmp]);
-			LIST_REMOVE(&freeBlockLists[tmp],block);
-		}else{
-			panic("alloc_block: no block available at any size")
-		}
-
 		LIST_REMOVE(&freePagesList, PInfo);
 
 		uint32 page_idx = PInfo - pageBlockInfoArr;
@@ -158,15 +149,25 @@ void *alloc_block(uint32 size)
 			struct BlockElement *blk = (struct BlockElement *)((uint8*)Page_va + OFST);
 			LIST_INSERT_HEAD(&freeBlockLists[index],blk);
 		}
+	
+		block = LIST_FIRST(&freeBlockLists[index]);
+        LIST_REMOVE(&freeBlockLists[index], block);
+
+	} else {
+
+		int tmp = index + 1;
+		while(tmp <= (LOG2_MAX_SIZE-LOG2_MIN_SIZE) && LIST_EMPTY(&freeBlockLists[tmp])){tmp++;}
+
+		if(tmp <= (LOG2_MAX_SIZE-LOG2_MIN_SIZE)){
+
+			block = LIST_FIRST(&freeBlockLists[tmp]);
+			LIST_REMOVE(&freeBlockLists[tmp],block);
+
+		}else{
+			panic("alloc_block: no block available at any size");
+		}
+
 	}
-
-
-
-	if (block == NULL){
-        panic("alloc_block: expected non-empty list but got empty");
-        return NULL;		
-	}
-	LIST_REMOVE(&freeBlockLists[index],block);
 
 	//fint the index of the page + make decrement
 	uint32 Page_Index = ((uint32)block - dynAllocStart)/PAGE_SIZE;
