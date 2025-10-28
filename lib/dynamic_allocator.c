@@ -116,6 +116,10 @@ void *alloc_block(uint32 size)
 
 	int index = ILog2(block_size) - LOG2_MIN_SIZE;
 
+	//get first free block
+	struct BlockElement *block = LIST_FIRST(&freeBlockLists[index]);
+
+
 	if(index < 0 || index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE)){
 		panic("alloc_block: Only god knows how this value became like that !!");
 		return NULL;
@@ -126,9 +130,14 @@ void *alloc_block(uint32 size)
 
 		struct PageInfoElement *PInfo = LIST_FIRST(&freePagesList);
 		
-		if(PInfo == NULL){
-			panic("alloc_block: no free page available");
-			return NULL;
+		int tmp = index + 1;
+		while(tmp <= (LOG2_MAX_SIZE-LOG2_MIN_SIZE) && LIST_EMPTY(&freeBlockLists[tmp])){tmp++}
+
+		if(tmp <= (LOG2_MAX_SIZE-LOG2_MIN_SIZE)){
+			block = LIST_FIRST(&freeBlockLists[tmp]);
+			LIST_REMOVE(&freeBlockLists[tmp],block);
+		}else{
+			panic("alloc_block: no block available at any size")
 		}
 
 		LIST_REMOVE(&freePagesList, PInfo);
@@ -151,8 +160,7 @@ void *alloc_block(uint32 size)
 		}
 	}
 
-	//get first free block
-	struct BlockElement *block = LIST_FIRST(&freeBlockLists[index]);
+
 
 	if (block == NULL){
         panic("alloc_block: expected non-empty list but got empty");
