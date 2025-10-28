@@ -117,6 +117,7 @@ void *alloc_block(uint32 size)
 	int index = ILog2(block_size) - LOG2_MIN_SIZE;
 
 	if(index < 0 || index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE)){
+		panic("alloc_block: Only god knows how this value became like that !!");
 		return NULL;
 	}
 
