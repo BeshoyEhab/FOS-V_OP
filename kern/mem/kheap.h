@@ -36,5 +36,4 @@ unsigned int kheap_virtual_address(unsigned int physical_address);
 unsigned int kheap_physical_address(unsigned int virtual_address);
 
 int numOfKheapVACalls;
-
 #endif // FOS_KERN_KHEAP_H_
