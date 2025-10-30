@@ -112,9 +112,8 @@ void *kmalloc(unsigned int size)
 
 		void *va = alloc_block(size);
 		release_kspinlock(&kheap_block_lock);
-		create_alloc_record()
 
-			if (va != NULL) return va;
+		if (va != NULL) return va;
 		else return NULL;
 	}
 	else
@@ -131,7 +130,7 @@ void *kmalloc(unsigned int size)
 		uint32 end_va = start_va + number_of_pages * PAGE_SIZE;
 		uint32 *ptr;
 		uint32 *ptr_page_table = get_page_table(ptr_page_directory, start_va, &ptr);
-
+		
 		if (ptr_page_table == TABLE_NOT_EXIST)
 		{
 			create_page_table(ptr_page_directory, start_va);
@@ -149,10 +148,12 @@ void *kmalloc(unsigned int size)
 		{
 			kheapPageAllocBreak = end_va;
 		}
-
+		
+		release_kspinlock(&MemFrameLists.mfllock);
 		for (uint32 va = start_va; va < end_va; va += PAGE_SIZE)
 		{
-			if (allocate_frame(&ptr_frame_info) != 0)
+			struct FrameInfo *ptr_frame_info = allocate_frame(&ptr_frame_info);
+			if (ptr_frame_info == NULL)
 			{
 				for (uint32 free_va = start_va; free_va < va; free_va += PAGE_SIZE)
 				{
@@ -161,6 +162,7 @@ void *kmalloc(unsigned int size)
 				release_kspinlock(&MemFrameLists.mfllock);
 				return NULL;
 			}
+			acquire_kspinlock(&MemFrameLists.mfllock);
 			map_frame(ptr_page_directory, ptr_frame_info, va, PERM_WRITEABLE);
 		}
 		release_kspinlock(&MemFrameLists.mfllock);
