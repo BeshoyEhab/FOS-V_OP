@@ -64,7 +64,7 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	for (int i=0; i<NumOfPages; i++){
 		pageBlockInfoArr[i].block_size =0;
 		pageBlockInfoArr[i].num_of_free_blocks =0;
-		LIST_INSERT_HEAD(&freePagesList, &pageBlockInfoArr[i]);
+		LIST_INSERT_TAIL(&freePagesList, &pageBlockInfoArr[i]);
 	}
 
 	//Comment the following line
