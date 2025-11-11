@@ -131,6 +131,7 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
 
 	return 0;
 }
+
 //* the strategy fo allocate Block of pages (Segments of pages)
 int custom_fit(uint32 required_pages)
 {
@@ -138,14 +139,14 @@ int custom_fit(uint32 required_pages)
 	struct kheapPagesBlock *block;
 	block->pageCount = required_pages;
 
-	// ToDO: Exact-fit
+	// TODO: Exact-fit
 	LIST_FOREACH();
 
-	// ToDO: Worst-fit
+	// TODO: Worst-fit
 
-	// ToDO: Break-update
+	// TODO: Break-update
 
-	// ToDO: **ERROR** can not allocate return -1
+	// TODO: **ERROR** can not allocate return -1
 }
 
 //===================================
