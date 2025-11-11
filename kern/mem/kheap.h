@@ -5,6 +5,7 @@
 #error "This is a FOS kernel header; user programs should not #include it"
 #endif
 
+#include <inc/queue.h> 
 #include <inc/types.h>
 
 /*2017*/
@@ -34,6 +35,20 @@ void *krealloc(void *virtual_address, unsigned int new_size);
 
 unsigned int kheap_virtual_address(unsigned int physical_address);
 unsigned int kheap_physical_address(unsigned int virtual_address);
+
+LIST_HEAD(free_pages_segments, kheapPageSegment);
+struct kheapPageSegment free_pages_segments;
+LIST_HEAD(allocated_pages_segments, kheapPageSegment);
+struct kheapPageSegment allocated_pages_segments;
+
+struct kheapPageSegment
+{
+	LIST_ENTRY(kheapPageSegment) prev_next_info;
+	uint32 pageCount;
+	uint32 startPage_va;
+};
+
+ 
 
 int numOfKheapVACalls;
 #endif // FOS_KERN_KHEAP_H_
