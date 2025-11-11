@@ -20,7 +20,8 @@ int split_segment(struct kheapPageSegment *segment, uint32 required_pages);
 //============================================
 // PAGE ALLOCATOR TRACKING STRUCTURES
 //============================================
-
+struct free_pages_segments free_pages_segments;
+struct allocated_pages_segments allocated_pages_segments;
 
 //==============================================
 // [1] INITIALIZE KERNEL HEAP:
@@ -47,6 +48,8 @@ void kheap_init()
 
 	// init the free list and allocated segments list
 	// struct kheapPageSegment *initial_segment = (struct kheapPageSegment *)kmalloc(sizeof(struct kheapPageSegment));
+	LIST_INIT(&free_pages_segments);
+	LIST_INIT(&allocated_pages_segments);
 
 	// Initialize locks the page and block locks
 	init_kspinlock(&kheap_block_lock, "kheap_block_lock");
@@ -121,8 +124,14 @@ int split_segment(struct kheapPageSegment *segment, uint32 required_pages)
 	for(uint32 i = 0; i < new_segment->pageCount; i++){
 		uint32 va = new_segment->startPage_va + i * PAGE_SIZE;
 		int status = allocate_page_to_frame(va, PTEs_KERNEL);
-		if(status != 0){
-			return -1;
+		if (status != 0) {
+			// Unmap allocated frame in case of failure
+            for (uint32 j = 0; j < i; j++) {
+                uint32 rva = new_segment->startPage_va + j * PAGE_SIZE;
+                unmap_frame(ptr_page_directory, ROUNDDOWN(rva, PAGE_SIZE));
+            }
+            kfree(new_segment);
+			return -1; 
 		}
 	}
 	LIST_INSERT_TAIL(&allocated_pages_segments, new_segment);
@@ -139,7 +148,7 @@ int custom_fit(uint32 required_pages)
 		return -1;
 
 	// means that no free segments and no enough space to break
-	if(LIST_EMPTY(&free_pages_segments) && kheapPageAllocBreak + required_pages * PAGE_SIZE >= KERNEL_HEAP_MAX)){
+	if(LIST_EMPTY(&free_pages_segments) && kheapPageAllocBreak + required_pages * PAGE_SIZE >= KERNEL_HEAP_MAX){
 		return -1;
 	}
 
@@ -264,6 +273,7 @@ void *kmalloc(unsigned int size)
 //
 void kfree(void *virtual_address)
 {
+	cprintf("kfree is called with va %x\n", (uint32)virtual_address);
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #2 kfree
 	// bool lock_is_in_hold = holding_kspinlock(&kheap_block_lock); // that return 0 if if free
 	// if (!lock_is_in_hold)

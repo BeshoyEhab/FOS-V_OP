@@ -37,9 +37,10 @@ unsigned int kheap_virtual_address(unsigned int physical_address);
 unsigned int kheap_physical_address(unsigned int virtual_address);
 
 LIST_HEAD(free_pages_segments, kheapPageSegment);
-struct kheapPageSegment free_pages_segments;
 LIST_HEAD(allocated_pages_segments, kheapPageSegment);
-struct kheapPageSegment allocated_pages_segments;
+
+extern struct free_pages_segments free_pages_segments;
+extern struct allocated_pages_segments allocated_pages_segments;
 
 struct kheapPageSegment
 {
