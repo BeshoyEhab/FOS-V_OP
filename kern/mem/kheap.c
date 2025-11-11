@@ -105,11 +105,16 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
 int split_segment(struct kheapPageSegment *segment, uint32 required_pages)
 {
 
-	struct kheapPageSegment *new_segment;
+	if(segment == NULL || segment->pageCount < required_pages)
+		return -1;
+
+	struct kheapPageSegment *new_segment = (struct kheapPageSegment *)kmalloc(sizeof(struct kheapPageSegment));
+	if (new_segment == NULL)
+		return -1;
 
 	new_segment->pageCount = required_pages;
 	new_segment->startPage_va = segment->startPage_va;
-	segment->startPage_va = segment->pageCount + required_pages * PAGE_SIZE;
+	segment->startPage_va = segment->startPage_va + required_pages * PAGE_SIZE;
 
 	segment->pageCount = segment->pageCount - required_pages;
 
@@ -129,7 +134,9 @@ int custom_fit(uint32 required_pages)
 {
 
 	// make a page block with needed sise
-	struct kheapPageSegment *segment;
+	struct kheapPageSegment *segment = NULL;
+	if (segment == NULL)
+		return -1;
 
 	// means that no free segments and no enough space to break
 	if(LIST_EMPTY(&free_pages_segments) && kheapPageAllocBreak + required_pages * PAGE_SIZE >= KERNEL_HEAP_MAX)){
@@ -155,7 +162,7 @@ int custom_fit(uint32 required_pages)
 
 
 	// Worst-fit
-	struct kheapPageSegment *max_sized_segment;
+	struct kheapPageSegment *max_sized_segment = NULL;
 	LIST_FOREACH(segment, &free_pages_segments){
 		if(segment->pageCount >= required_pages){
 			if(max_sized_segment == NULL || segment->pageCount > max_sized_segment->pageCount){
@@ -232,7 +239,7 @@ void *kmalloc(unsigned int size)
 	// struct kheapPagesBlock *block = NULL;
 
 	// TODO: int custom_fit(uint32 required_pages); , return the status 0 sucsess , 1 fiels , -1 panic
-	int status = custom_fit(uint32 required_pages);
+	int status = custom_fit(required_pages);
 
 	if(status == -1){
 		return NULL;
