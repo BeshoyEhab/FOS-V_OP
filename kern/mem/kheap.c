@@ -10,47 +10,39 @@
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
+#define PAGE_ALLOCATOR_AREA_START (KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE + PAGE_SIZE)
+#define NUM_OF_KHEAP_ALLOCATION_PAGES ((KERNEL_HEAP_MAX - PAGE_ALLOCATOR_AREA_START) / PAGE_SIZE)
+#define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE | PERM_BUFFERED) // page table entries of the kernel
+
+int allocate_page_to_map(uint32 va, uint32 perm);
+int custom_fit(uint32 required_pages);
 //============================================
 // PAGE ALLOCATOR TRACKING STRUCTURES
 //============================================
-
-/*
-Structure to track each allocation in page allocator
-that trakes the allocated and free ranges in page allocator
-struct PageAllocInfo {
-	uint32 va_start;        // Starting virtual address (page-aligned)
-	uint32 size;            // Size in bytes may be multi pages (multiple of PAGE_SIZE)
-	uint8 is_free;          // check the page status  (0 = allocated, 1 = free)
-	LIST_ENTRY(PageAllocInfo) prev_next_info;  // For linked list
-};
-
-*/
-
-struct PageAllocInfo
+struct kheapPagesBlock
 {
-
-	uint32 va_start;
-	uint32 size;
-	uint8 is_free;
-	LIST_ENTRY(PageAllocInfo)
+	LIST_ENTRY(kheapPagesBlock)
 	prev_next_info;
+	uint32 pageCount;
+	uint32 startPage_va;
 };
 
-LIST_HEAD(PageAllocInfo_List, PageAllocInfo);
-struct PageAllocInfo_List page_alloc_list; // list of all allocated pages info
+// a list to track free pages blocks
+LIST_HEAD(HeapPAgesBlockList, kheapPagesBlock);
+struct HeapPAgesBlockList free_kheap_pages_blocks_list;
 
-// initialization of locks
-struct kspinlock kheap_page_lock;
-struct kspinlock kheap_block_lock;
+struct kheapPagesBlock HeapPagesBlocks[NUM_OF_KHEAP_ALLOCATION_PAGES]; // array os all pages blocks
 
 //==============================================
 // [1] INITIALIZE KERNEL HEAP:
 //==============================================
 // TODO: [PROJECT'25.GM#2] KERNEL HEAP - #0 kheap_init [GIVEN]
 // Remember to initialize locks (if any)
+struct kspinlock kheap_block_lock;
 
 void kheap_init()
 {
+
 	//==================================================================================
 	// DON'T CHANGE THESE LINES==========================================================
 	//==================================================================================
@@ -62,10 +54,29 @@ void kheap_init()
 	}
 	//==================================================================================
 	//==================================================================================
-	// Initialize the page allocation tracking list
-	LIST_INIT(&page_alloc_list);
+
+	// init the first block which is free and size with the whole page allocator area
+	struct kheapPagesBlock *initBlock = HeapPagesBlocks;
+
+	initBlock->pageCount = ((kheapPageAllocBreak - (kheapPageAllocStart)) / PAGE_SIZE);
+	initBlock->startPage_va = kheapPageAllocStart;
+	cprintf("\n that in initBlock page count : %d and with va : %x \n\n", initBlock->pageCount, initBlock->startPage_va);
+
+	// init the free list and insert the initBloch which is the whole Kheap
+	LIST_INIT(&free_kheap_pages_blocks_list);
+	LIST_INSERT_HEAD(&free_kheap_pages_blocks_list, initBlock);
+
+	// // only from kheapPageAllocStart (dynAllocEnd + PAGE_SIZE) TO the kheapPageAllocBreak (break)
+	// for (uint32 va = kheapPageAllocStart; va < kheapPageAllocBreak + 2 * PAGE_SIZE; va = va + PAGE_SIZE)
+	// {
+	// 	// ERROR : we need to make custom fit first du to  **(kheapPageAllocStart = kheapPageAllocBreak)**
+	// 	cprintf("\nthat in the for LOOP va:%x\n", va);
+	// 	// TODO: map page to the pysical frame
+	// 	int status = allocate_page_to_frame(va, PTEs_KERNEL);
+	// 	cprintf("\nthat in the for LOOP status : %d\n", status);
+	// }
+
 	// Initialize locks the page and block locks
-	init_kspinlock(&kheap_page_lock, "kheap_page_lock");
 	init_kspinlock(&kheap_block_lock, "kheap_block_lock");
 }
 
@@ -91,6 +102,51 @@ void return_page(void *va)
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
+//* to allocate page to the physical frame
+int allocate_page_to_frame(uint32 va, uint32 perm)
+{
+	uint32 *pageTable = NULL;
+	struct FrameInfo *frame_info = get_frame_info(ptr_page_directory, va, &pageTable);
+	cprintf("\niam in allocate_page_to_frame\n");
+	if (frame_info != NULL)
+	{
+
+		panic("allocate_page_to_map() is trying to allocate frame that is allready taken");
+	}
+
+	int status = allocate_frame(&frame_info);
+	if (status == E_NO_MEM)
+	{
+		return 1;
+	}
+	cprintf("\nthat in the allocate_page_to_frame status of allocate_frame: %d\n", status);
+
+	status = map_frame(ptr_page_directory, frame_info, va, perm);
+	if (status == E_NO_MEM)
+	{
+		free_frame(frame_info);
+		return 1;
+	}
+	cprintf("\nthat in the allocate_page_to_frame status of map_frame: %d\n", status);
+
+	return 0;
+}
+//* the strategy fo allocate Block of pages (Segments of pages)
+int custom_fit(uint32 required_pages)
+{
+	// make a page block with needed sise
+	struct kheapPagesBlock *block;
+	block->pageCount = required_pages;
+
+	// ToDO: Exact-fit
+	LIST_FOREACH();
+
+	// ToDO: Worst-fit
+
+	// ToDO: Break-update
+
+	// ToDO: **ERROR** can not allocate return -1
+}
 
 //===================================
 // [1] ALLOCATE SPACE IN KERNEL HEAP:
@@ -98,7 +154,6 @@ void return_page(void *va)
 void *kmalloc(unsigned int size)
 {
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
-	// Your code is here
 	if (size == 0)
 		return NULL;
 
@@ -113,63 +168,27 @@ void *kmalloc(unsigned int size)
 		void *va = alloc_block(size);
 		release_kspinlock(&kheap_block_lock);
 
-		if (va != NULL) return va;
-		else return NULL;
-	}
-	else
-	{
-
-		bool page_lock_is_in_hold = holding_kspinlock(&MemFrameLists.mfllock); //
-
-		// If the lock is not held, acquire it
-		if (!page_lock_is_in_hold)
-			acquire_kspinlock(&MemFrameLists.mfllock);
-
-		uint32 number_of_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
-		uint32 start_va = ROUNDDOWN(dynAllocEnd + PAGE_SIZE, PAGE_SIZE);
-		uint32 end_va = start_va + number_of_pages * PAGE_SIZE;
-		uint32 *ptr;
-		uint32 *ptr_page_table = get_page_table(ptr_page_directory, start_va, &ptr);
-		
-		if (ptr_page_table == TABLE_NOT_EXIST)
-		{
-			create_page_table(ptr_page_directory, start_va);
-			ptr_page_table = get_page_table(ptr_page_directory, start_va, &ptr);
-		}
-
-		struct frameInfo *ptr_frame_info = get_frame_info(ptr_page_directory, start_va, ptr_page_table);
-		if (end_va > KERNEL_HEAP_MAX)
-		{
-			release_kspinlock(&MemFrameLists.mfllock);
+		if (va != NULL)
+			return va;
+		else
 			return NULL;
-		}
-
-		if (end_va > kheapPageAllocBreak)
-		{
-			kheapPageAllocBreak = end_va;
-		}
-		
-		release_kspinlock(&MemFrameLists.mfllock);
-		for (uint32 va = start_va; va < end_va; va += PAGE_SIZE)
-		{
-			struct FrameInfo *ptr_frame_info = allocate_frame(&ptr_frame_info);
-			if (ptr_frame_info == NULL)
-			{
-				for (uint32 free_va = start_va; free_va < va; free_va += PAGE_SIZE)
-				{
-					unmap_frame(ptr_page_directory, free_va);
-				}
-				release_kspinlock(&MemFrameLists.mfllock);
-				return NULL;
-			}
-			acquire_kspinlock(&MemFrameLists.mfllock);
-			map_frame(ptr_page_directory, ptr_frame_info, va, PERM_WRITEABLE);
-		}
-		release_kspinlock(&MemFrameLists.mfllock);
-		return (void *)start_va;
-		// the code to allocate pages
 	}
 
+	bool is_holding_page_lock = holding_kspinlock(&MemFrameLists.mfllock);
+
+	if (!is_holding_page_lock)
+	{
+		acquire_kspinlock(&MemFrameLists.mfllock);
+	}
+
+	// Convert given size from bytes to pages
+	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
+	// struct kheapPagesBlock *block = NULL;
+
+	// TODO: int custom_fit(uint32 required_pages); , return the status 0 sucsess , 1 fiels , -1 panic
+	int status = custom_fit(uint32 required_pages);
+
+	release_kspinlock(&MemFrameLists.mfllock);
 	// return NULL if it failer to allocate
 	return NULL;
 
