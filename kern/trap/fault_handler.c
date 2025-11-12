@@ -267,8 +267,30 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	{
 		//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
 		//Your code is here
+        struct FrameInfo * ptr_Frame_Info;
+		allocate_frame(&ptr_Frame_Info);
+		map_frame(faulted_env->env_page_directory, ptr_Frame_Info, fault_va, PERM_WRITEABLE | PERM_USER| PERM_PRESENT);	
+
+		int read_page = pf_read_env_page(faulted_env,fault_va);
+		
+		if (read_page ==E_PAGE_NOT_EXIST_IN_PF)
+		{
+          if (!((fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX )||(fault_va >= USTACKBOTTOM && fault_va < USTACKTOP)))
+              {
+				env_exit();
+			  }
+
+		}
+
+	    struct WorkingSetElement *last_element= env_page_ws_list_create_element(faulted_env,fault_va);
+		LIST_INSERT_TAIL(&(faulted_env->page_WS_list),last_element);
+		faulted_env->page_last_WS_element=last_element;
+
+
+
+
 		//Comment the following line
-		panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
+		//panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
 	}
 	else
 	{
