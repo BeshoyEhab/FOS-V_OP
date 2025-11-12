@@ -5,7 +5,7 @@
 #error "This is a FOS kernel header; user programs should not #include it"
 #endif
 
-#include <inc/queue.h> 
+#include <inc/queue.h>
 #include <inc/types.h>
 
 /*2017*/
@@ -44,12 +44,11 @@ extern struct allocated_pages_segments allocated_pages_segments;
 
 struct kheapPageSegment
 {
-	LIST_ENTRY(kheapPageSegment) prev_next_info;
-	uint32 pageCount;
+	LIST_ENTRY(kheapPageSegment)
+	prev_next_info;
+	int pageCount;
 	uint32 startPage_va;
 };
-
- 
 
 int numOfKheapVACalls;
 #endif // FOS_KERN_KHEAP_H_

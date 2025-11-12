@@ -10,11 +10,9 @@
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
-#define PAGE_ALLOCATOR_AREA_START (KERNEL_HEAP_START + dynAllocEnd + PAGE_SIZE)
-#define NUM_OF_KHEAP_ALLOCATION_PAGES ((KERNEL_HEAP_MAX - PAGE_ALLOCATOR_AREA_START) / PAGE_SIZE)
 #define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE | PERM_BUFFERED) // page table entries of the kernel
 
-int allocate_page_to_map(uint32 va, uint32 perm);
+int allocate_page_to_frame(uint32 va, uint32 perm);
 uint32 custom_fit(uint32 required_pages);
 uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages);
 //============================================
@@ -32,7 +30,6 @@ struct kspinlock kheap_block_lock;
 
 void kheap_init()
 {
-
 	//==================================================================================
 	// DON'T CHANGE THESE LINES==========================================================
 	//==================================================================================
@@ -110,7 +107,7 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages)
 	if (segment == NULL || segment->pageCount < required_pages)
 		return 1;
 
-	struct kheapPageSegment *new_segment = (struct kheapPageSegment *)kmalloc(sizeof(struct kheapPageSegment));
+	struct kheapPageSegment *new_segment = NULL;
 	if (new_segment == NULL)
 		return 1;
 
@@ -188,7 +185,7 @@ uint32 custom_fit(uint32 required_pages)
 		}
 	}
 
-	if (max_sized_segment->pageCount != NULL)
+	if (max_sized_segment != NULL)
 	{
 		uint32 split_status = split_segment(max_sized_segment, required_pages);
 		if (split_status == 1)
@@ -201,6 +198,7 @@ uint32 custom_fit(uint32 required_pages)
 	// Break-update
 	if (kheapPageAllocBreak + required_pages * PAGE_SIZE < KERNEL_HEAP_MAX)
 	{
+
 		for (uint32 i = 0; i < required_pages; i++)
 		{
 			uint32 va = kheapPageAllocBreak + i * PAGE_SIZE;
@@ -211,6 +209,7 @@ uint32 custom_fit(uint32 required_pages)
 			}
 		} // FOR LOOP END
 
+		cprintf("\nAllocated %d pages at va %x by breaking\n", required_pages, kheapPageAllocBreak);
 		segment->pageCount = required_pages;
 		segment->startPage_va = kheapPageAllocBreak;
 		LIST_INSERT_TAIL(&allocated_pages_segments, segment);
@@ -271,10 +270,6 @@ void *kmalloc(unsigned int size)
 	}
 
 	return (void *)result;
-
-	// return NULL if it failer to allocate
-	return NULL;
-
 	// Comment the following line
 	// kpanic_into_prompt("kmalloc() is not implemented yet...!!");
 
