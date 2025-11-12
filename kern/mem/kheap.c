@@ -11,11 +11,11 @@
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
 #define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE | PERM_BUFFERED) // page table entries of the kernel
-#define MAX_SEGMENTS 65536//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
+#define MAX_SEGMENTS 65536														//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
 
 int allocate_page_to_frame(uint32 va, uint32 perm);
-void* custom_fit(uint32 required_pages);
-uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages);
+void *custom_fit(uint32 required_pages);
+uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
 
 static struct kheapPageSegment segment_pool[MAX_SEGMENTS];
 static int segment_pool_used[MAX_SEGMENTS];
@@ -32,38 +32,7 @@ struct allocated_pages_segments allocated_pages_segments;
 // TODO: [PROJECT'25.GM#2] KERNEL HEAP - #0 kheap_init [GIVEN]
 // Remember to initialize locks (if any)
 struct kspinlock kheap_block_lock;
-
-static struct kheapPageSegment *allocate_segment_struct(void)
-{
-	for (int i = 0; i < MAX_SEGMENTS; ++i) {
-		if (!segment_pool_used[i]) {
-			segment_pool_used[i] = 1;
-
-			segment_pool[i].prev_next_info.le_next = NULL;
-			segment_pool[i].prev_next_info.le_prev = NULL;
-			segment_pool[i].pageCount = 0;
-			segment_pool[i].startPage_va = 0;
-			return &segment_pool[i];
-		}
-	}
-	return NULL;
-}
-
-static void free_segment_struct(struct kheapPageSegment *seg)
-{
-	if (seg == NULL)
-		return;
-
-	int idx = seg - segment_pool;
-	if (idx < 0 || idx >= MAX_SEGMENTS)
-		return;
-
-	segment_pool_used[idx] = 0;
-	seg->prev_next_info.le_next = NULL;
-	seg->prev_next_info.le_prev = NULL;
-	seg->pageCount = 0;
-	seg->startPage_va = 0;
-}
+struct kspinlock kheap_page_lock;
 
 void kheap_init()
 {
@@ -86,6 +55,7 @@ void kheap_init()
 
 	// Initialize locks the page and block locks
 	init_kspinlock(&kheap_block_lock, "kheap_block_lock");
+	init_kspinlock(&kheap_page_lock, "kheap_page_lock");
 }
 
 //==============================================
@@ -110,6 +80,43 @@ void return_page(void *va)
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
+
+//* i DO NOT know what is this function DO
+static struct kheapPageSegment *allocate_segment_struct(void)
+{
+	for (int i = 0; i < MAX_SEGMENTS; ++i)
+	{
+		if (!segment_pool_used[i])
+		{
+			segment_pool_used[i] = 1;
+			segment_pool[i].prev_next_info.le_next = NULL;
+			segment_pool[i].prev_next_info.le_prev = NULL;
+			segment_pool[i].pageCount = 0;
+			segment_pool[i].startPage_va = 0;
+			return &segment_pool[i];
+		}
+	}
+	return NULL;
+}
+
+//* i DO NOT know what is this function DO
+static void free_segment_struct(struct kheapPageSegment *seg)
+{
+	cprintf("\nFreeing segment struct\n");
+	if (seg == NULL)
+		return;
+
+	int idx = seg - segment_pool;
+	if (idx < 0 || idx >= MAX_SEGMENTS)
+		return;
+
+	segment_pool_used[idx] = 0;
+	seg->prev_next_info.le_next = NULL;
+	seg->prev_next_info.le_prev = NULL;
+	seg->pageCount = 0;
+	seg->startPage_va = 0;
+}
+
 //* to allocate page to the physical frame
 int allocate_page_to_frame(uint32 va, uint32 perm)
 {
@@ -138,7 +145,8 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
 	return 0; ///< in case of success
 }
 
-uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages)
+//* Split a segment into two segments
+uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, uint32 *out_va)
 {
 
 	if (segment == NULL || segment->pageCount < required_pages)
@@ -166,26 +174,28 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages)
 				uint32 rva = new_segment->startPage_va + j * PAGE_SIZE;
 				unmap_frame(ptr_page_directory, ROUNDDOWN(rva, PAGE_SIZE));
 			}
-			kfree(new_segment);
+			kfree(new_segment); // free_segment_struct(new_segment); //
 			return 1;
 		}
 	}
 	LIST_INSERT_TAIL(&allocated_pages_segments, new_segment);
-	return new_segment->startPage_va;
+	*out_va = new_segment->startPage_va;
+	return 0; // success
 }
 
 //* the strategy fo allocate Block of pages (Segments of pages)
-void* custom_fit(uint32 required_pages)
+void *custom_fit(uint32 required_pages)
 {
 
-	if (required_pages == 0) return NULL;
+	if (required_pages == 0)
+		return NULL;
 
 	// means that no free segments and no enough space to break
-	if (LIST_EMPTY(&free_pages_segments) && kheapPageAllocBreak + required_pages * PAGE_SIZE >= KERNEL_HEAP_MAX)
+	if (LIST_EMPTY(&free_pages_segments) && kheapPageAllocBreak + required_pages * PAGE_SIZE > KERNEL_HEAP_MAX)
 	{
 		return NULL;
 	}
-	
+
 	struct kheapPageSegment *segment = NULL;
 	// Exact-fit
 	LIST_FOREACH(segment, &free_pages_segments)
@@ -222,16 +232,17 @@ void* custom_fit(uint32 required_pages)
 
 	if (max_sized_segment != NULL)
 	{
-		uint32 split_status = split_segment(max_sized_segment, required_pages);
+		uint32 result_va;
+		uint32 split_status = split_segment(max_sized_segment, required_pages, &result_va);
 		if (split_status == 1)
 		{
 			return NULL;
 		}
-		return split_status;
+		return result_va;
 	}
 
 	// Break-update
-	if ((kheapPageAllocBreak + (required_pages * PAGE_SIZE)) < KERNEL_HEAP_MAX)
+	if ((kheapPageAllocBreak + (required_pages * PAGE_SIZE)) <= KERNEL_HEAP_MAX)
 	{
 		for (uint32 i = 0; i < required_pages; i++)
 		{
@@ -242,20 +253,25 @@ void* custom_fit(uint32 required_pages)
 				return NULL;
 			}
 		} // FOR LOOP END
-		
+
 		struct kheapPageSegment *newseg = allocate_segment_struct();
-        if (newseg == NULL) {
-			/* rollback mappings */
-            for (uint32 j = 0; j < required_pages; ++j) {
-				uint32 rva = kheapPageAllocBreak + j * PAGE_SIZE;
-                unmap_frame(ptr_page_directory, ROUNDDOWN(rva, PAGE_SIZE));
-            }
-            return NULL;
-        }
+		if (newseg == NULL)
+		{
+			return NULL;
+		}
+
 		newseg->pageCount = required_pages;
 		newseg->startPage_va = kheapPageAllocBreak;
 
-		kheapPageAllocBreak += required_pages * PAGE_SIZE;
+		uint32 new_break = kheapPageAllocBreak + required_pages * PAGE_SIZE;
+
+		// Check for break overflow
+		if (new_break < kheapPageAllocBreak || new_break > KERNEL_HEAP_MAX)
+		{
+			return NULL;
+		}
+
+		kheapPageAllocBreak = new_break;
 
 		LIST_INSERT_TAIL(&allocated_pages_segments, newseg);
 
@@ -284,7 +300,9 @@ void *kmalloc(unsigned int size)
 			acquire_kspinlock(&kheap_block_lock);
 
 		void *va = alloc_block(size);
-		release_kspinlock(&kheap_block_lock);
+
+		if (!block_lock_is_in_hold)
+			release_kspinlock(&kheap_block_lock);
 
 		if (va != NULL)
 			return va;
@@ -292,11 +310,11 @@ void *kmalloc(unsigned int size)
 			return NULL;
 	}
 
-	bool is_holding_page_lock = holding_kspinlock(&MemFrameLists.mfllock);
+	bool is_holding_page_lock = holding_kspinlock(&kheap_page_lock);
 
 	if (!is_holding_page_lock)
 	{
-		acquire_kspinlock(&MemFrameLists.mfllock);
+		acquire_kspinlock(&kheap_page_lock);
 	}
 
 	// Convert given size from bytes to pages
@@ -304,11 +322,11 @@ void *kmalloc(unsigned int size)
 	// struct kheapPagesBlock *block = NULL;
 
 	// TODO: int custom_fit(uint32 required_pages); , return the status 0 sucsess , 1 fail , -1 panic
-	uint32 result = custom_fit(required_pages);
+	void *result = custom_fit(required_pages);
 
-	release_kspinlock(&MemFrameLists.mfllock);
+	if (!is_holding_page_lock)
+		release_kspinlock(&kheap_page_lock);
 
-	
 	return result;
 
 	// Comment the following line
