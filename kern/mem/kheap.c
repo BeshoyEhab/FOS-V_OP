@@ -10,8 +10,8 @@
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
-#define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE | PERM_BUFFERED) // page table entries of the kernel
-#define MAX_SEGMENTS 65536														//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
+#define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE) // page table entries of the kernel
+#define MAX_SEGMENTS 1048576									//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
 
 int allocate_page_to_frame(uint32 va, uint32 perm);
 void *custom_fit(uint32 required_pages);
@@ -102,7 +102,6 @@ static struct kheapPageSegment *allocate_segment_struct(void)
 //* i DO NOT know what is this function DO
 static void free_segment_struct(struct kheapPageSegment *seg)
 {
-	cprintf("\nFreeing segment struct\n");
 	if (seg == NULL)
 		return;
 
@@ -166,7 +165,7 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, ui
 	{
 		uint32 va = new_segment->startPage_va + i * PAGE_SIZE;
 		int status = allocate_page_to_frame(va, PTEs_KERNEL);
-		if (status != 0)
+		if (status == -1)
 		{
 			// Unmap allocated frame in case of failure
 			for (uint32 j = 0; j < i; j++)
@@ -174,7 +173,7 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, ui
 				uint32 rva = new_segment->startPage_va + j * PAGE_SIZE;
 				unmap_frame(ptr_page_directory, ROUNDDOWN(rva, PAGE_SIZE));
 			}
-			kfree(new_segment); // free_segment_struct(new_segment); //
+			free_segment_struct(new_segment); // kfree(new_segment);
 			return 1;
 		}
 	}
@@ -206,14 +205,19 @@ void *custom_fit(uint32 required_pages)
 			{
 				uint32 va = segment->startPage_va + i * PAGE_SIZE;
 				int status = allocate_page_to_frame(va, PTEs_KERNEL);
-				if (status != 0)
+				if (status == -1)
 				{
+					for (uint32 j = 0; j < i; j++)
+					{
+						uint32 rva = segment->startPage_va + j * PAGE_SIZE;
+						unmap_frame(ptr_page_directory, rva);
+					}
 					return NULL;
 				}
 			}
 			LIST_REMOVE(&free_pages_segments, segment);
 			LIST_INSERT_TAIL(&allocated_pages_segments, segment);
-			return segment->startPage_va;
+			return (void *)segment->startPage_va;
 		}
 	}
 
@@ -238,30 +242,12 @@ void *custom_fit(uint32 required_pages)
 		{
 			return NULL;
 		}
-		return result_va;
+		return (void *)result_va;
 	}
 
 	// Break-update
 	if ((kheapPageAllocBreak + (required_pages * PAGE_SIZE)) <= KERNEL_HEAP_MAX)
 	{
-		for (uint32 i = 0; i < required_pages; i++)
-		{
-			uint32 va = kheapPageAllocBreak + i * PAGE_SIZE;
-			int status = allocate_page_to_frame(va, PTEs_KERNEL);
-			if (status != 0)
-			{
-				return NULL;
-			}
-		} // FOR LOOP END
-
-		struct kheapPageSegment *newseg = allocate_segment_struct();
-		if (newseg == NULL)
-		{
-			return NULL;
-		}
-
-		newseg->pageCount = required_pages;
-		newseg->startPage_va = kheapPageAllocBreak;
 
 		uint32 new_break = kheapPageAllocBreak + required_pages * PAGE_SIZE;
 
@@ -271,11 +257,40 @@ void *custom_fit(uint32 required_pages)
 			return NULL;
 		}
 
+		for (uint32 i = 0; i < required_pages; i++)
+		{
+			uint32 va = kheapPageAllocBreak + i * PAGE_SIZE;
+			int status = allocate_page_to_frame(va, PTEs_KERNEL);
+			if (status == -1)
+			{
+				for (uint32 j = 0; j < i; j++)
+				{
+					uint32 rva = kheapPageAllocBreak + j * PAGE_SIZE;
+					unmap_frame(ptr_page_directory, rva);
+				}
+				return NULL;
+			}
+		} // FOR LOOP END
+
+		struct kheapPageSegment *newseg = allocate_segment_struct();
+		if (newseg == NULL)
+		{
+			for (uint32 j = 0; j < required_pages; j++)
+			{
+				uint32 rva = kheapPageAllocBreak + j * PAGE_SIZE;
+				unmap_frame(ptr_page_directory, rva);
+			}
+			return NULL;
+		}
+
+		newseg->pageCount = required_pages;
+		newseg->startPage_va = kheapPageAllocBreak;
+
 		kheapPageAllocBreak = new_break;
 
 		LIST_INSERT_TAIL(&allocated_pages_segments, newseg);
 
-		return newseg->startPage_va;
+		return (void *)newseg->startPage_va;
 	}
 
 	return NULL;
@@ -339,7 +354,7 @@ void *kmalloc(unsigned int size)
 //=================================
 //=================================
 // Details:
-// 	- takes the virtual address allocated by kmalloc.
+// 	- takes the virtual address allocated by kmalloc.‍‍‍‍
 // 	- check if the virtual address belongs to a block or pages and free it accordingly.
 //
 void kfree(void *virtual_address)
