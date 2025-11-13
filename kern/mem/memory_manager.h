@@ -40,6 +40,8 @@ uint32 memory_scarce_threshold_percentage;	// Memory remains plentiful till the 
 #define DEFAULT_MEM_SCARCE_PERCENTAGE 25	// Default threshold % of free memory to indicate scarce MEM
 //***********************************
 
+#define MAX_FRAMES (1024 * 1024)
+extern uint32 frames_va[MAX_FRAMES];
 //***********************************
 /*DATA*/
 struct freeFramesCounters
