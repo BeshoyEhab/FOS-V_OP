@@ -919,6 +919,9 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory)
 	return stack_base;
 }
 
+
+
+
 /*2024*/
 //===========================================================
 // 6) DELETE USER KERNEL STACK (One Per Process):
