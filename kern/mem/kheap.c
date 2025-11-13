@@ -503,13 +503,12 @@ int update_break_after_free(void)
 //=================================
 unsigned int kheap_virtual_address(unsigned int physical_address)
 {
-	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #3 kheap_virtual_address
-	// struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
-	// uint32 va;
-	// Comment the following line
-	// panic("kheap_virtual_address() is not implemented yet...!!");
-
-	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
+    uint32 frame_number = physical_address / PAGE_SIZE;
+    uint32 virtual_address = frames_va[frame_number];
+    if (virtual_address == 0) {
+        return 0;
+    }
+    return virtual_address + PGOFF(physical_address);
 }
 
 //=================================
@@ -517,28 +516,13 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 //=================================
 unsigned int kheap_physical_address(unsigned int virtual_address)
 {
-	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
-	struct FrameInfo *allocated_frame;
-	uint32 *ptr_page_table;
-
-	allocated_frame = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
-
-	// if virtual address doesn't map to anything
-	if (allocated_frame == NULL)
-	{
-		cprintf("\nthat will return 0 as ph \n");
-		return 0;
-	}
-	// get the physical address
-	uint32 frame_physical_address = to_physical_address(allocated_frame);
-	// Frame physical address + offset
-	uint32 kheap_physical_address = frame_physical_address + PGOFF(virtual_address);
-
-	return kheap_physical_address;
-
-	// panic("kheap_physical_address() is not implemented yet...!!");
-
-	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
+    uint32 *ptr_page_table = NULL;
+    struct FrameInfo *frame_info = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
+    if (frame_info == NULL)
+    {
+        return 0;
+    }
+    return to_physical_address(frame_info) + PGOFF(virtual_address);
 }
 
 //=================================================================================//
