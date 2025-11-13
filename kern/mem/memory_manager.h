@@ -38,10 +38,7 @@ static inline uint32 get_uheap_strategy(){return _UHeapPlacementStrategy ;}
 //2018 Memory Threshold
 uint32 memory_scarce_threshold_percentage;	// Memory remains plentiful till the % of free frames gets below this threshold percentage
 #define DEFAULT_MEM_SCARCE_PERCENTAGE 25	// Default threshold % of free memory to indicate scarce MEM
-//***********************************
 
-#define MAX_FRAMES (1024 * 1024)
-extern uint32 frames_va[MAX_FRAMES];
 //***********************************
 /*DATA*/
 struct freeFramesCounters

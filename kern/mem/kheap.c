@@ -503,12 +503,14 @@ int update_break_after_free(void)
 //=================================
 unsigned int kheap_virtual_address(unsigned int physical_address)
 {
-    uint32 frame_number = physical_address / PAGE_SIZE;
-    uint32 virtual_address = frames_va[frame_number];
-    if (virtual_address == 0) {
-        return 0;
-    }
-    return virtual_address + PGOFF(physical_address);
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #3 kheap_virtual_address
+	struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
+	uint32 va = ptr_frame_info->va;
+	if (va >= KERNEL_HEAP_START && va < KERNEL_HEAP_MAX)
+	{
+		return va + PGOFF(physical_address);
+	}
+	return 0;
 }
 
 //=================================
@@ -516,13 +518,15 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 //=================================
 unsigned int kheap_physical_address(unsigned int virtual_address)
 {
-    uint32 *ptr_page_table = NULL;
-    struct FrameInfo *frame_info = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
-    if (frame_info == NULL)
-    {
-        return 0;
-    }
-    return to_physical_address(frame_info) + PGOFF(virtual_address);
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
+	uint32 *ptr_page_table = NULL;
+	struct FrameInfo *frame_info = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
+	if (frame_info == NULL)
+	{
+		return 0;
+	}
+	return to_physical_address(frame_info) + PGOFF(virtual_address);
+	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
 //=================================================================================//

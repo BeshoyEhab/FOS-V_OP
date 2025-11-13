@@ -10,8 +10,6 @@
 #include <kern/cpu/cpu.h>
 #include "memory_manager.h"
 
-uint32 frames_va[MAX_FRAMES];
-
 /*2024: Removed. Replaced by a call to the lgdt()*/
 //struct Pseudodesc gdt_pd =
 //{
