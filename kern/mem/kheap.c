@@ -16,7 +16,10 @@
 int allocate_page_to_frame(uint32 va, uint32 perm);
 void *custom_fit(uint32 required_pages);
 uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
-
+void merge_free_segments(void);
+int update_break_after_free(void);
+struct kheapPageSegment *find_page_segment(uint32 va);
+//*
 static struct kheapPageSegment segment_pool[MAX_SEGMENTS];
 static int segment_pool_used[MAX_SEGMENTS];
 
@@ -124,7 +127,7 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
 
 	if (frame_info != NULL)
 	{
-		panic("allocate_page_to_map() is trying to allocate frame that is allready taken");
+		panic("allocate_page_to_fram() is trying to allocate frame that is allready taken");
 		return -1;
 	}
 
@@ -359,45 +362,140 @@ void *kmalloc(unsigned int size)
 //
 void kfree(void *virtual_address)
 {
-	cprintf("kfree is called with va %x\n", (uint32)virtual_address);
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #2 kfree
-	// bool lock_is_in_hold = holding_kspinlock(&kheap_block_lock); // that return 0 if if free
-	// if (!lock_is_in_hold)
-	// 	acquire_kspinlock(&kheap_block_lock);
+	uint32 va = (uint32)virtual_address;
 
-	// uint32 va = (uint32)virtual_address;
-	// if (va == NULL || va < KERNEL_HEAP_START || va >= KERNEL_HEAP_MAX)
-	// {
-	// 	panic("kfree: virtual_address is invalid");
-	// 	release_kspinlock(&kheap_block_lock);
-	// 	return;
-	// }
+	// Validate address
+	if (va == 0 || va < KERNEL_HEAP_START || va >= KERNEL_HEAP_MAX)
+	{
+		panic("kfree: invalid virtual address");
+		return;
+	}
 
-	// uint32 block_size = get_block_size(va);
-	// uint32 *ptr;
-	// uint32 *ptr_page_table = get_page_table(ptr_page_directory, va, &ptr);
+	// check if BLOCK or PAGE allocator
+	if (va >= KERNEL_HEAP_START && va < KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE)
+	{
+		// BLOCK ALLOCATOR
+		bool block_lock_held = holding_kspinlock(&kheap_block_lock);
+		if (!block_lock_held)
+			acquire_kspinlock(&kheap_block_lock);
 
-	// if (ptr_page_table == TABLE_NOT_EXIST)
-	// {
-	// 	create_page_table(ptr_page_directory, va);
-	// 	ptr_page_table = get_page_table(ptr_page_directory, va, &ptr);
-	// }
+		free_block((void *)va);
 
-	// struct FrameInfo *ptr_frame_info = get_frame_info(ptr_page_directory, va, ptr_page_table);
-	// if (block_size <= DYN_ALLOC_MAX_BLOCK_SIZE)
-	// 	free_block(va);
-	// else
-	// {
-	// 	uint32 number_of_pages = ROUNDUP(block_size, PAGE_SIZE) / PAGE_SIZE;
-	// 	for (uint32 i = 0; i < number_of_pages; i++)
-	// 	{
-	// 		free_frame(ptr_frame_info);
-	// 		// unmap_frame(ptr_page_directory, ROUNDDOWN(va + i * PAGE_SIZE, PAGE_SIZE));
-	// 	}
-	// 	decrement_references(ptr_frame_info);
-	// }
-	// release_kspinlock(&kheap_block_lock);
+		if (!block_lock_held)
+		{
+			release_kspinlock(&kheap_block_lock);
+		}
+	}
+	else if (va >= kheapPageAllocStart && va < KERNEL_HEAP_MAX)
+	{
+		// PAGE ALLOCATOR
+		bool page_lock_held = holding_kspinlock(&kheap_page_lock);
+		if (!page_lock_held)
+			acquire_kspinlock(&kheap_page_lock);
+
+		// Find the segment containing this VA
+		struct kheapPageSegment *segment = find_page_segment(va);
+		uint32 size = segment->pageCount * PAGE_SIZE;
+		if (segment == NULL)
+		{
+			if (!page_lock_held)
+				release_kspinlock(&kheap_page_lock);
+			panic("kfree: address not found in allocated segments");
+			return;
+		}
+
+		for (void *va = virtual_address; va < virtual_address + size; va += PAGE_SIZE)
+		{
+			uint32 pa = kheap_physical_address((uint32 *)va);
+			struct FrameInfo *frame_info = to_frame_info(pa);
+
+			if (!frame_info)
+			{
+				panic("kfree(): trying to free an unallocated frame '%x' (frame #%d)",
+					  frame_info,
+					  to_frame_number(frame_info));
+			}
+
+			// Should invalidate cache
+			unmap_frame(ptr_page_directory, (uint32)va);
+		}
+
+		// Remove from allocated list and add to free list
+		LIST_REMOVE(&allocated_pages_segments, segment);
+		LIST_INSERT_HEAD(&free_pages_segments, segment);
+
+		// TODO: Merge adjacent free segments
+		merge_free_segments();
+		// TODO: Update break if freeing last segment
+		update_break_after_free();
+
+		if (!page_lock_held)
+			release_kspinlock(&kheap_page_lock);
+	}
+	else
+	{
+		panic("kfree: address not in any valid heap region");
+	}
+
 	// panic("kfree() is not implemented yet...!!");
+}
+
+struct kheapPageSegment *find_page_segment(uint32 va)
+{
+	// assert(va && (va >= PAGE_ALLOCATOR_START));
+	// uint32 offset = (va - PAGE_ALLOCATOR_START) / PAGE_SIZE;
+	// return heap_blocks + offset;
+
+	struct kheapPageSegment *seg_iter = NULL;
+	LIST_FOREACH(seg_iter, &allocated_pages_segments)
+	{
+		if (seg_iter->startPage_va == va)
+		{
+			return seg_iter;
+		}
+	}
+}
+
+void merge_free_segments(void)
+{
+	struct kheapPageSegment *seg1, *seg2;
+	// if two segments after each othe
+restart:
+	LIST_FOREACH(seg1, &free_pages_segments)
+	{
+		LIST_FOREACH(seg2, &free_pages_segments)
+		{
+			if (seg1 == seg2)
+				continue;
+			// Check if seg1 is immediately before seg2
+			if (seg1->startPage_va + seg1->pageCount * PAGE_SIZE == seg2->startPage_va)
+			{
+				// Merge seg2 into seg1
+				seg1->pageCount += seg2->pageCount;
+				LIST_REMOVE(&free_pages_segments, seg2);
+				free_segment_struct(seg2);
+				goto restart; // Restart to check for more merges
+			}
+		}
+	}
+}
+
+int update_break_after_free(void)
+{
+	// Find the segment with highest end address
+	struct kheapPageSegment *seg;
+	uint32 max_end = kheapPageAllocStart;
+	LIST_FOREACH(seg, &allocated_pages_segments)
+	{
+		uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
+		if (seg_end == kheapPageAllocBreak)
+		{
+			kheapPageAllocBreak = seg->startPage_va;
+			return 0;
+		}
+	}
+	return 1;
 }
 
 //=================================
@@ -420,20 +518,24 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 unsigned int kheap_physical_address(unsigned int virtual_address)
 {
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
-	// uint32 va = (uint32)virtual_address;
-	// uint32 *ptr;
-	// uint32 *ptr_page_table = get_page_table(ptr_page_directory, va, &ptr);
-	// if (ptr_page_table == TABLE_NOT_EXIST)
-	// {
-	// 	create_page_table(ptr_page_directory, va);
-	// 	ptr_page_table = get_page_table(ptr_page_directory, va, &ptr);
-	// }
-	// struct FrameInfo *ptr_frame_info = get_frame_info(ptr_page_directory, va, ptr_page_table);
-	// int physical_address = allocate_frame(ptr_frame_info);
-	// if (physical_address == -1)
-	// 	return 0;
-	// else
-	// 	return physical_address;
+	struct FrameInfo *allocated_frame;
+	uint32 *ptr_page_table;
+
+	allocated_frame = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
+
+	// if virtual address doesn't map to anything
+	if (allocated_frame == NULL)
+	{
+		cprintf("\nthat will return 0 as ph \n");
+		return 0;
+	}
+	// get the physical address
+	uint32 frame_physical_address = to_physical_address(allocated_frame);
+	// Frame physical address + offset
+	uint32 kheap_physical_address = frame_physical_address + PGOFF(virtual_address);
+
+	return kheap_physical_address;
+
 	// panic("kheap_physical_address() is not implemented yet...!!");
 
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
