@@ -901,22 +901,28 @@ uint32 __cur_k_stk = KERNEL_HEAP_START;
 //===========================================================
 void* create_user_kern_stack(uint32* ptr_user_page_directory)
 {
-	//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #1 create_user_kern_stack
-	//Your code is here
-	void *stack_base =kmalloc(KERNEL_STACK_SIZE);
-	if (stack_base ==NULL)
-		panic("error in creating user kernel stack");
-	
-	pt_set_page_permissions(ptr_user_page_directory,stack_base, 0, PERM_PRESENT);
-
-
-	//Comment the following line
-	// panic("create_user_kern_stack() is not implemented yet...!!");
-
-	//allocate space for the user kernel stack.
-	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
-	//return a pointer to the start of the allocated space (including the GUARD PAGE)
+		
+	#if USE_KHEAP
+	//TODO: [PROJECT'24.MS2 - #07] [2] FAULT HANDLER I - create_user_kern_stack
+	void *stack_base = kmalloc(KERNEL_STACK_SIZE);
+	if(stack_base == NULL){
+		panic("user_environment.c::create_user_kern_stack(), Failed to create user kernel stack");
+	}
+	uint32 guard_page = (uint32)stack_base;
+	uint32 *page_table = NULL;
+	if(get_page_table(ptr_user_page_directory, guard_page, &page_table) == TABLE_IN_MEMORY){
+		page_table[PTX(guard_page)] &= ~PERM_PRESENT;
+	}
 	return stack_base;
+
+#else
+	if (KERNEL_HEAP_MAX - __cur_k_stk < KERNEL_STACK_SIZE)
+		panic("Run out of kernel heap!! Unable to create a kernel stack for the process. Can't create more processes!");
+	void* kstack = (void*) __cur_k_stk;
+	__cur_k_stk += KERNEL_STACK_SIZE;
+	return kstack ;
+//	panic("KERNEL HEAP is OFF! user kernel stack is not supported");
+#endif
 }
 
 

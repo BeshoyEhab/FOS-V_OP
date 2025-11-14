@@ -52,8 +52,24 @@ inline void pt_set_page_permissions(uint32* directory, uint32 virtual_address, u
 inline int pt_get_page_permissions(uint32* directory, uint32 virtual_address )
 {
 	//TODO: PRACTICE: fill this function.
-	//Comment the following line
-	panic("pt_get_page_permissions() is not implemented yet!");
+	//C//[1] Get the table
+	uint32* ptr_page_table ;
+	int ret = get_page_table(directory, virtual_address, &ptr_page_table);
+
+	//[2] If exists, return the permissions
+	if (ptr_page_table != NULL)
+	{
+		//cprintf("va=%x perm = %x\n", virtual_address, ptr_page_table[PTX(virtual_address)] & 0x00000FFF);
+		return (ptr_page_table[PTX(virtual_address)] & 0x00000FFF);
+	}
+	//[3] Else, return -1
+	else
+	{
+		//cprintf("va=%x not exist and has no page table\n", virtual_address);
+		return -1;
+	}
+	
+	//panic("pt_get_page_permissions() is not implemented yet!");
 }
 
 //===============================

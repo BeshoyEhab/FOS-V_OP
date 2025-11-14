@@ -1535,8 +1535,8 @@ int test_kheap_phys_addr()
 	int eval;
 	cprintf_colored(TEXT_cyan,"\n1. Alloc some spaces in both allocators\n");
 	{
-		eval = initial_block_allocations();
-		eval += initial_page_allocations();
+		eval = initial_page_allocations();
+		eval += initial_block_allocations();
 		if (eval != 200)
 		{
 			cprintf_colored(TEXT_TESTERR_CLR,"initial allocations are not correct!\nplease make sure the the kmalloc test is correct before testing the kheap_phys_addr\n");
@@ -1660,27 +1660,27 @@ int test_kheap_phys_addr()
 			}
 			assert(numOfAllocBlocksPerSize[idx] == 1);
 
-			//kfree 64B blocks
-			idx = 3;
-			for (int s = 33; s <= 64; ++s)
+			//kfree 32B blocks
+			idx = 2;
+			for (int s = 17; s <= 32; ++s)
 			{
 				free_block(startBlockVAs[s]);
 				numOfAllocBlocksPerSize[idx]--;
 			}
 			assert(numOfAllocBlocksPerSize[idx] == 0);
-			startOfFreedBlocks[0] = 33;
-			endOfFreedBlocks[0] = 64;
+			startOfFreedBlocks[0] = 17;
+			endOfFreedBlocks[0] = 32;
 
-			//kfree 256B blocks
-			idx = 5;
-			for (int s = 129; s <= 256; ++s)
+			//kfree 128B blocks
+			idx = 4;
+			for (int s = 65; s <= 128; ++s)
 			{
 				free_block(startBlockVAs[s]);
 				numOfAllocBlocksPerSize[idx]--;
 			}
 			assert(numOfAllocBlocksPerSize[idx] == 0);
-			startOfFreedBlocks[1] = 129;
-			endOfFreedBlocks[1] = 256;
+			startOfFreedBlocks[1] = 65;
+			endOfFreedBlocks[1] = 128;
 		}
 	}
 
@@ -1827,9 +1827,8 @@ int test_kheap_virt_addr()
 	int eval;
 	cprintf_colored(TEXT_cyan,"\n1. Alloc some spaces in both allocators\n");
 	{
-		eval = initial_block_allocations();
-		eval += initial_page_allocations();
-
+		eval = initial_page_allocations();
+		eval += initial_block_allocations();
 		if (eval != 200)
 		{
 			cprintf_colored(TEXT_TESTERR_CLR,"initial allocations are not correct!\nplease make sure the the kmalloc test is correct before testing the kheap_phys_addr\n");
@@ -1954,27 +1953,27 @@ int test_kheap_virt_addr()
 			}
 			assert(numOfAllocBlocksPerSize[idx] == 1);
 
-			//kfree 64B blocks
-			idx = 3;
-			for (int s = 33; s <= 64; ++s)
+			//kfree 32B blocks
+			idx = 2;
+			for (int s = 17; s <= 32; ++s)
 			{
 				free_block(startBlockVAs[s]);
 				numOfAllocBlocksPerSize[idx]--;
 			}
 			assert(numOfAllocBlocksPerSize[idx] == 0);
-			startOfFreedBlocks[0] = 33;
-			endOfFreedBlocks[0] = 64;
+			startOfFreedBlocks[0] = 17;
+			endOfFreedBlocks[0] = 32;
 
-			//kfree 256B blocks
-			idx = 5;
-			for (int s = 129; s <= 256; ++s)
+			//kfree 128B blocks
+			idx = 4;
+			for (int s = 65; s <= 128; ++s)
 			{
 				free_block(startBlockVAs[s]);
 				numOfAllocBlocksPerSize[idx]--;
 			}
 			assert(numOfAllocBlocksPerSize[idx] == 0);
-			startOfFreedBlocks[1] = 129;
-			endOfFreedBlocks[1] = 256;
+			startOfFreedBlocks[1] = 65;
+			endOfFreedBlocks[1] = 128;
 		}
 	}
 

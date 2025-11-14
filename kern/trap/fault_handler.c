@@ -160,7 +160,7 @@ void fault_handler(struct Trapframe *tf)
 	else
 	{
 		if (userTrap)
-		{
+		 {
 			if (fault_va >= USER_TOP) {
 				//cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
 				env_exit();

@@ -16,7 +16,7 @@
 int allocate_page_to_frame(uint32 va, uint32 perm);
 void *custom_fit(uint32 required_pages);
 uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
-void merge_free_segments(void);
+void merge_free_segments(struct kheapPageSegment *segment);
 int update_break_after_free(void);
 struct kheapPageSegment *find_page_segment(uint32 va);
 //*
@@ -365,17 +365,14 @@ void kfree(void *virtual_address)
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #2 kfree
 	uint32 va = (uint32)virtual_address;
 
-	// Validate address
 	if (va == 0 || va < KERNEL_HEAP_START || va >= KERNEL_HEAP_MAX)
 	{
 		panic("kfree: invalid virtual address");
 		return;
 	}
 
-	// check if BLOCK or PAGE allocator
-	if (va >= KERNEL_HEAP_START && va < KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE)
+	if (va >= KERNEL_HEAP_START && va <  KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE )
 	{
-		// BLOCK ALLOCATOR
 		bool block_lock_held = holding_kspinlock(&kheap_block_lock);
 		if (!block_lock_held)
 			acquire_kspinlock(&kheap_block_lock);
@@ -389,12 +386,10 @@ void kfree(void *virtual_address)
 	}
 	else if (va >= kheapPageAllocStart && va < KERNEL_HEAP_MAX)
 	{
-		// PAGE ALLOCATOR
 		bool page_lock_held = holding_kspinlock(&kheap_page_lock);
 		if (!page_lock_held)
 			acquire_kspinlock(&kheap_page_lock);
 
-		// Find the segment containing this VA
 		struct kheapPageSegment *segment = find_page_segment(va);
 		uint32 size = segment->pageCount * PAGE_SIZE;
 		if (segment == NULL)
@@ -417,17 +412,12 @@ void kfree(void *virtual_address)
 					  to_frame_number(frame_info));
 			}
 
-			// Should invalidate cache
 			unmap_frame(ptr_page_directory, (uint32)va);
 		}
 
-		// Remove from allocated list and add to free list
 		LIST_REMOVE(&allocated_pages_segments, segment);
-		LIST_INSERT_HEAD(&free_pages_segments, segment);
 
-		// TODO: Merge adjacent free segments
-		merge_free_segments();
-		// TODO: Update break if freeing last segment
+		merge_free_segments(segment);
 		update_break_after_free();
 
 		if (!page_lock_held)
@@ -435,17 +425,14 @@ void kfree(void *virtual_address)
 	}
 	else
 	{
-		panic("kfree: address not in any valid heap region");
+		panic("kfree: address not in heap space");
 	}
 
-	// panic("kfree() is not implemented yet...!!");
 }
 
 struct kheapPageSegment *find_page_segment(uint32 va)
 {
-	// assert(va && (va >= PAGE_ALLOCATOR_START));
-	// uint32 offset = (va - PAGE_ALLOCATOR_START) / PAGE_SIZE;
-	// return heap_blocks + offset;
+	
 
 	struct kheapPageSegment *seg_iter = NULL;
 	LIST_FOREACH(seg_iter, &allocated_pages_segments)
@@ -455,38 +442,78 @@ struct kheapPageSegment *find_page_segment(uint32 va)
 			return seg_iter;
 		}
 	}
+	return seg_iter;
 }
 
-void merge_free_segments(void)
+void merge_free_segments(struct kheapPageSegment *segment)
 {
-	struct kheapPageSegment *seg1, *seg2;
-	// if two segments after each othe
-restart:
-	LIST_FOREACH(seg1, &free_pages_segments)
+	struct kheapPageSegment *seg1 =NULL ,*seg2 =NULL ;
+	uint32 *ptr_table=NULL;
+	bool merge_down =0;
+if(segment->startPage_va >KERNEL_HEAP_START)
+{
+	get_page_table(ptr_page_directory, segment->startPage_va - PAGE_SIZE, &ptr_table);
+	
+	if (!((ptr_table != NULL) && (ptr_table[PTX(segment->startPage_va - PAGE_SIZE)] & PERM_PRESENT)))
 	{
-		LIST_FOREACH(seg2, &free_pages_segments)
+	LIST_FOREACH(seg1 , &free_pages_segments)
+	{
+		if(seg1->startPage_va+(seg1->pageCount*PAGE_SIZE)==segment->startPage_va)
 		{
-			if (seg1 == seg2)
-				continue;
-			// Check if seg1 is immediately before seg2
-			if (seg1->startPage_va + seg1->pageCount * PAGE_SIZE == seg2->startPage_va)
-			{
-				// Merge seg2 into seg1
-				seg1->pageCount += seg2->pageCount;
-				LIST_REMOVE(&free_pages_segments, seg2);
-				free_segment_struct(seg2);
-				goto restart; // Restart to check for more merges
-			}
+			seg2=seg1;
+			merge_down=1;
+			seg1->pageCount+=segment->pageCount;
+		}
+
+	}
+    }
+}
+    seg1=NULL;
+	get_page_table(ptr_page_directory, segment->startPage_va +segment->pageCount* PAGE_SIZE, &ptr_table);
+	
+	if (!((ptr_table != NULL) && (ptr_table[PTX(segment->startPage_va +segment->pageCount* PAGE_SIZE)] & PERM_PRESENT)))
+	{
+		if(!merge_down)
+		{
+
+	LIST_FOREACH(seg1 , &free_pages_segments)
+	{
+		if(seg1->startPage_va==(segment->startPage_va + (segment->pageCount* PAGE_SIZE)) )
+		{
+			seg1->startPage_va=segment->startPage_va;
+			seg1->pageCount+=segment->pageCount;
+			return;
 		}
 	}
+    }
+	     
+	    else
+		{
+         LIST_FOREACH(seg1 , &free_pages_segments)
+	{
+		if(seg1->startPage_va==(seg2->startPage_va + (seg2->pageCount* PAGE_SIZE)) )
+		{
+			seg1->startPage_va=seg2->startPage_va;
+			seg1->pageCount+=seg2->pageCount;
+			LIST_REMOVE(&free_pages_segments,seg2);
+			return;
+		}
+	}
+		}
+    }
+	if(merge_down)
+	   return ;
+	LIST_INSERT_HEAD(&free_pages_segments,segment);
+
+
+
+
 }
 
 int update_break_after_free(void)
 {
-	// Find the segment with highest end address
 	struct kheapPageSegment *seg;
-	uint32 max_end = kheapPageAllocStart;
-	LIST_FOREACH(seg, &allocated_pages_segments)
+	LIST_FOREACH(seg, &free_pages_segments)
 	{
 		uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
 		if (seg_end == kheapPageAllocBreak)
