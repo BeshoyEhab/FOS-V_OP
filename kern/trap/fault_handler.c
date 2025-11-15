@@ -161,7 +161,7 @@ void fault_handler(struct Trapframe *tf)
 	{
 		if (userTrap)
 		 {
-			if (fault_va >= USER_TOP) {
+			if (fault_va >= USER_TOP || fault_va <= 0) {
 				//cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
 				env_exit();
 			}
@@ -173,7 +173,7 @@ void fault_handler(struct Trapframe *tf)
 				env_exit();
 			}
 
-			if (!(perms & PERM_WRITEABLE)) {
+			if (!(perms & PERM_PRESENT && perms & PERM_WRITEABLE)) {
 				//cprintf("User process writing to a read-only page. Exiting.\n");
 				env_exit();
 			}

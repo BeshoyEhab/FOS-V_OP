@@ -1008,7 +1008,6 @@ void initialize_environment(struct Env* e, uint32* ptr_user_page_directory, unsi
 		//[4] Setup the context to return to env_start() at the early first run from the scheduler
 		memset(e->context, 0, sizeof(*(e->context)));
 		e->context->eip = (uint32) (env_start);
-
 	}
 
 	// Allocate the page working set

@@ -10,6 +10,25 @@
       "cwd": "${workspaceRoot}",
       "executable": "obj/kern/kernel",
       "preLaunchTask": "build-debug"
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "cwd": "/home/Bisho/OS-Project/kern/proc",
+      "program": "/home/Bisho/OS-Project/kern/proc/build/Debug/outDebug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
     }
   ]
 }
