@@ -306,18 +306,17 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		struct FrameInfo *ptr_Frame_Info;
 		allocate_frame(&ptr_Frame_Info);
 		map_frame(faulted_env->env_page_directory, ptr_Frame_Info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT);
-
-		int read_page = pf_read_env_page(faulted_env, fault_va);
+		int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 
 		if (read_page == E_PAGE_NOT_EXIST_IN_PF)
 		{
-			if (!((fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX) || (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP)))
+			if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
 			{
 				env_exit();
 			}
 		}
 
-		struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, fault_va);
+		struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 		LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
 		faulted_env->page_last_WS_element = last_element;
 
