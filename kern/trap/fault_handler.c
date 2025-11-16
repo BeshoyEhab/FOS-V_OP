@@ -196,9 +196,9 @@ void fault_handler(struct Trapframe *tf)
 	{
 		if (userTrap)
 		{
-			if (fault_va >= USER_TOP || fault_va <= 0)
+			if (fault_va >= USER_TOP)
 			{
-				cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
+				// cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
 				env_exit();
 			}
 
@@ -207,7 +207,7 @@ void fault_handler(struct Trapframe *tf)
 			if (!(perm & PERM_UHPAGE) && fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
 
 			{
-				cprintf("User process accessing unmarked page in heap. Exiting.\n");
+				// cprintf("User process accessing unmarked page in heap. Exiting.\n");
 				env_exit();
 			}
 
@@ -300,8 +300,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 	uint32 wsSize = env_page_ws_get_size(faulted_env);
 #endif
 
-	// cprintf("\n\nws size\n\n%x", wsSize);
-	// cprintf("\n\nws max size\n\n%x", faulted_env->page_WS_max_size);
 	if (wsSize < (faulted_env->page_WS_max_size))
 	{
 		// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
@@ -310,7 +308,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		allocate_frame(&ptr_Frame_Info);
 		map_frame(faulted_env->env_page_directory, ptr_Frame_Info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT);
 		int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-
 		if (read_page == E_PAGE_NOT_EXIST_IN_PF)
 		{
 			if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
@@ -318,24 +315,13 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				env_exit();
 			}
 		}
-		// cprintf("Page working set after loading the program...\n");
-		// env_page_ws_print(faulted_env);
 
-		// cprintf("Table working set after loading the program...\n");
-		// env_table_ws_print(faulted_env);
 		struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 		LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
-
-		faulted_env->page_last_WS_element = NULL;
-
-		// cprintf("Page working set after loading the program...\n");
-		// env_page_ws_print(faulted_env);
-
-		// cprintf("Table working set after loading the program...\n");
-		// env_table_ws_print(faulted_env);
-
-		// Comment the following line
-		// panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
+		if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
+		{
+			faulted_env->page_last_WS_element = last_element;
+		}
 	}
 	else
 	{
@@ -347,7 +333,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			// Comment the following line
 			panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 		}
-		else if (isPageReplacmentAlgorithmOPTIMAL())
+		else if (isPageReplacmentAlgorithmCLOCK())
 		{
 			// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
 			// Your code is here

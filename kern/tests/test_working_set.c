@@ -170,8 +170,7 @@ int sys_check_WS_list(uint32 *WS_list_content, int actual_WS_list_size, uint32 l
 		// cprintf("comparison start from va = %x\n",ptr_WS_element->virtual_address);
 
 		for (int i = 0; i < actual_WS_list_size; ++i)
-		{
-
+		{	
 			if (ROUNDDOWN(ptr_WS_element->virtual_address, PAGE_SIZE) != (uint32)ROUNDDOWN(WS_list_content[idx_WS_list], PAGE_SIZE))
 			{
 				WS_list_validation = 0;

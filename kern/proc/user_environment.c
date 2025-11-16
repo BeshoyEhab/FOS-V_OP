@@ -441,8 +441,8 @@ struct Env *env_create(char *user_program_name, unsigned int page_WS_size, unsig
 		// cprintf("Page working set after loading the program...\n");
 		// env_page_ws_print(e);
 
-		// cprintf("Table working set after loading the program...\n");
-		// env_table_ws_print(e);
+		//	cprintf("Table working set after loading the program...\n");
+		//	env_table_ws_print(e);
 	}
 	return e;
 }
