@@ -202,19 +202,19 @@ void fault_handler(struct Trapframe *tf)
 				env_exit();
 			}
 
-			uint32 perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
+			uint32 permsN = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
 
-			if (!(perms & PERM_UHPAGE) && fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
+			if (!(permsN & PERM_UHPAGE) && fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)
 			{
 				cprintf("User process accessing unmarked page in heap. Exiting.\n");
 				env_exit();
 			}
 
-			if ((perms & PERM_PRESENT && !(perms & PERM_WRITEABLE)))
+			if ((permsN & PERM_PRESENT) && !(permsN & PERM_WRITEABLE) && (tf->tf_err & FEC_WR))
 			{
-				cprintf("User process writing to a read-only page. Exiting.\n");
 				env_exit();
 			}
+
 		}
 
 		/*2022: Check if fault due to Access Rights */
@@ -250,6 +250,7 @@ void fault_handler(struct Trapframe *tf)
 	// Refresh the TLB cache
 	tlbflush();
 	/*************************************************************/
+
 }
 
 //=========================
