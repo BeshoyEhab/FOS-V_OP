@@ -320,7 +320,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
 		if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
 		{
-			faulted_env->page_last_WS_element = last_element;
+			faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
 		}
 	}
 	else
