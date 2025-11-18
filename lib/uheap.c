@@ -10,7 +10,7 @@
 int __firstTimeFlag = 1;
 void uheap_init()
 {
-	if(__firstTimeFlag)
+	if (__firstTimeFlag)
 	{
 		initialize_dynamic_allocator(USER_HEAP_START, USER_HEAP_START + DYN_ALLOC_MAX_SIZE);
 		uheapPlaceStrategy = sys_get_uheap_strategy();
@@ -24,9 +24,9 @@ void uheap_init()
 //==============================================
 // [2] GET A PAGE FROM THE KERNEL FOR DA:
 //==============================================
-int get_page(void* va)
+int get_page(void *va)
 {
-	int ret = __sys_allocate_page(ROUNDDOWN(va, PAGE_SIZE), PERM_USER|PERM_WRITEABLE|PERM_UHPAGE);
+	int ret = __sys_allocate_page(ROUNDDOWN(va, PAGE_SIZE), PERM_USER | PERM_WRITEABLE | PERM_UHPAGE);
 	if (ret < 0)
 		panic("get_page() in user: failed to allocate page from the kernel");
 	return 0;
@@ -35,7 +35,7 @@ int get_page(void* va)
 //==============================================
 // [3] RETURN A PAGE FROM THE DA TO KERNEL:
 //==============================================
-void return_page(void* va)
+void return_page(void *va)
 {
 	int ret = __sys_unmap_frame(ROUNDDOWN((uint32)va, PAGE_SIZE));
 	if (ret < 0)
@@ -49,68 +49,99 @@ void return_page(void* va)
 //=================================
 // [1] ALLOCATE SPACE IN USER HEAP:
 //=================================
-void* malloc(uint32 size)
+void *malloc(uint32 size)
 {
 	//==============================================================
-	//DON'T CHANGE THIS CODE========================================
+	// DON'T CHANGE THIS CODE========================================
 	uheap_init();
-	if (size == 0) return NULL ;
+	if (size == 0)
+		return NULL;
 	//==============================================================
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #1 malloc
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.IM#2] USER HEAP - #1 malloc
+	// Your code is here
+	// Comment the following line
 	panic("malloc() is not implemented yet...!!");
 }
 
 //=================================
 // [2] FREE SPACE FROM USER HEAP:
 //=================================
-void free(void* virtual_address)
+void free(void *virtual_address)
 {
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #3 free
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.IM#2] USER HEAP - #3 free
+	// Your code is here
+	// Comment the following line
 	panic("free() is not implemented yet...!!");
 }
 
 //=================================
 // [3] ALLOCATE SHARED VARIABLE:
 //=================================
-void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
+void *smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 {
 	//==============================================================
-	//DON'T CHANGE THIS CODE========================================
+	// DON'T CHANGE THIS CODE========================================
 	uheap_init();
-	if (size == 0) return NULL ;
+	if (size == 0)
+		return NULL;
 	//==============================================================
 
-	//TODO: [PROJECT'25.IM#3] SHARED MEMORY - #2 smalloc
-	//Your code is here
-	//Comment the following line
-	panic("smalloc() is not implemented yet...!!");
+	void *virsual_adress = malloc(ROUNDUP(size, PAGE_SIZE));
+	if (virsual_adress == NULL)
+	{
+		return NULL;
+	}
+	uint32 ID = sys_create_shared_object(sharedVarName, ROUNDUP(size, PAGE_SIZE), isWritable, virsual_adress);
+	if (ID == E_SHARED_MEM_EXISTS || ID == E_NO_SHARE)
+	{
+		free(virsual_adress);
+		return NULL;
+	}
+
+	// TODO: [PROJECT'25.IM#3] SHARED MEMORY - #2 smalloc
+	// Your code is here
+	// Comment the following line
+	// panic("smalloc() is not implemented yet...!!");
+	return virsual_adress;
 }
 
 //========================================
 // [4] SHARE ON ALLOCATED SHARED VARIABLE:
 //========================================
-void* sget(int32 ownerEnvID, char *sharedVarName)
+void *sget(int32 ownerEnvID, char *sharedVarName)
 {
 	//==============================================================
-	//DON'T CHANGE THIS CODE========================================
+	// DON'T CHANGE THIS CODE========================================
 	uheap_init();
 	//==============================================================
+	int size = sys_size_of_shared_object(ownerEnvID, sharedVarName);
+	if (size == 0 || size == E_SHARED_MEM_NOT_EXISTS)
+	{
+		return NULL;
+	}
+	void *virsual_aderss = malloc(ROUNDUP(size, PAGE_SIZE));
+	if (virsual_aderss == NULL)
+	{
+		return NULL;
+	}
+	uint32 ID = sys_get_shared_object(ownerEnvID, sharedVarName, virsual_aderss);
 
-	//TODO: [PROJECT'25.IM#3] SHARED MEMORY - #4 sget
-	//Your code is here
-	//Comment the following line
-	panic("sget() is not implemented yet...!!");
+	if (ID == E_SHARED_MEM_EXISTS)
+	{
+		free(virsual_aderss);
+		return NULL;
+	}
+
+	// TODO: [PROJECT'25.IM#3] SHARED MEMORY - #4 sget
+	// Your code is here
+	// Comment the following line
+	// panic("sget() is not implemented yet...!!");
+	return virsual_aderss;
 }
-
 
 //==================================================================================//
 //============================== BONUS FUNCTIONS ===================================//
 //==================================================================================//
-
 
 //=================================
 // REALLOC USER SPACE:
@@ -130,12 +161,11 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 void *realloc(void *virtual_address, uint32 new_size)
 {
 	//==============================================================
-	//DON'T CHANGE THIS CODE========================================
+	// DON'T CHANGE THIS CODE========================================
 	uheap_init();
 	//==============================================================
 	panic("realloc() is not implemented yet...!!");
 }
-
 
 //=================================
 // FREE SHARED VARIABLE:
@@ -147,17 +177,16 @@ void *realloc(void *virtual_address, uint32 new_size)
 //	use sys_delete_shared_object(...); which switches to the kernel mode,
 //	calls delete_shared_object(...) in "shared_memory_manager.c", then switch back to the user mode here
 //	the delete_shared_object() function is empty, make sure to implement it.
-void sfree(void* virtual_address)
+void sfree(void *virtual_address)
 {
-	//TODO: [PROJECT'25.BONUS#5] EXIT #2 - sfree
-	//Your code is here
-	//Comment the following line
+	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - sfree
+	// Your code is here
+	// Comment the following line
 	panic("sfree() is not implemented yet...!!");
 
 	//	1) you should find the ID of the shared variable at the given address
 	//	2) you need to call sys_freeSharedObject()
 }
-
 
 //==================================================================================//
 //========================== MODIFICATION FUNCTIONS ================================//
