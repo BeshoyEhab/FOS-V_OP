@@ -287,9 +287,23 @@ int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct
 	// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #2 get_optimal_num_faults
 	// Your code is here
 	// Comment the following line
-	panic("get_optimal_num_faults() is not implemented yet...!!");
+	// panic("get_optimal_num_faults() is not implemented yet...!!");
 }
 
+//=============================
+// Helper Functions
+//=============================
+void clearPresent(struct Env *faulted_env){
+	struct Env *i;
+	LIST_FOREACH(i, faulted_env){
+		uint32 element_va = i->page_WS_list->virtual_address;
+		pt_set_page_permissions(ptr_page_directory, element_va, NULL, PERM_PRESENT);
+	}
+}
+
+//============================
+// Page Fault Handler
+//============================
 void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 {
 #if USE_KHEAP
@@ -336,9 +350,24 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		else if (isPageReplacmentAlgorithmCLOCK())
 		{
 			// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
-			// Your code is here
-			// Comment the following line
-			panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+			WS_current_Size = LIST_SIZE(&(faulted_env->page_WS_list));
+			if(WS_current_Size < wsSize){
+				page_fault_handler(faulted_env, fault_va);
+			}
+			else{
+				int perms = pt_get_page_permissions(faulted_env->env_page_directory, faulted_env->page_last_WS_element);
+				
+				if(perms != -1)
+				{
+					if(perms != PERM_PRESENT){
+						clearPresent(faulted_env);
+						struct FrameInfo *frame_info;
+						allocate_frame(&frame_info);
+						map_frame(faulted_env->env_page_directory, frame_info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_WRITEABLE| PERM_USER);
+					}
+				}
+				
+			}
 		}
 		else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
 		{
@@ -356,6 +385,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		}
 	}
 }
+
 
 void __page_fault_handler_with_buffering(struct Env *curenv, uint32 fault_va)
 {
