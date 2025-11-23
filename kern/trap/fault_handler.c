@@ -429,7 +429,60 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #2 LRU Aging Replacement
 				// Your code is here
 				// Comment the following line
-				panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+
+				struct WorkingSetElement *elem = LIST_FIRST(&(faulted_env->page_WS_list));
+				struct WorkingSetElement *victim = NULL;
+
+				//aging updater
+				while (elem != NULL){
+					uint32 va = elem->virtual_address;
+
+					int perms = pt_get_page_permissions(faulted_env->env_page_directory, va);
+					int used = (perms & PERM_USED) ? 1:0;
+
+					elem->time_stamp = elem->time_stamp >> 1;
+					elem->time_stamp |= (used << 31);
+
+					if (used){ 
+						pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
+					}
+
+					elem = LIST_NEXT(elem);
+				}
+
+				//min called victim
+				elem = LIST_FIRST(&(faulted_env->page_WS_list));
+				uint32 min_time = 0xFFFFFFFF;
+
+				while(elem != NULL){
+					if (elem->time_stamp < min_time){
+						min_time = elem->time_stamp;
+						victim = elem;
+					}
+					elem = LIST_NEXT(elem);
+				}
+
+				//del vctm
+				if (victim != NULL){
+					unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
+					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
+				}
+
+				//add new frame
+				struct FrameInfo *new_frame;
+				allocate_frame(&new_frame);
+
+				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT | PERM_WRITEABLE | PERM_USED);
+				
+
+				struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
+
+				if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size){
+					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
+
+				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 			}
 			else if (isPageReplacmentAlgorithmModifiedCLOCK()){
 				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
