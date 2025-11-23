@@ -309,10 +309,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 #if USE_KHEAP
 	struct WorkingSetElement *victimWSElement = NULL;
 	uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
-#else
-	int iWS = faulted_env->page_last_WS_index;
-	uint32 wsSize = env_page_ws_get_size(faulted_env);
-#endif
+
 	if (wsSize < (faulted_env->page_WS_max_size))
 	{
 		// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
@@ -345,44 +342,52 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			// Your code is here
 			// Comment the following line
 			panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
-		}
-		else if (isPageReplacmentAlgorithmCLOCK())
-		{
-			// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
-			WS_current_Size = LIST_SIZE(&(faulted_env->page_WS_list));
-			if(WS_current_Size < wsSize){
-				page_fault_handler(faulted_env, fault_va);
-			}
-			else{
-				int perms = pt_get_page_permissions(faulted_env->env_page_directory, faulted_env->page_last_WS_element);
-				
-				if(perms != -1)
-				{
-					if(perms != PERM_PRESENT){
-						clearPresent(faulted_env);
-						struct FrameInfo *frame_info;
-						allocate_frame(&frame_info);
-						map_frame(faulted_env->env_page_directory, frame_info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_WRITEABLE| PERM_USER);
-					}
+		} else {
+
+			if (isPageReplacmentAlgorithmCLOCK())
+			{
+				// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
+				WS_current_Size = LIST_SIZE(&(faulted_env->page_WS_list));
+				if(WS_current_Size < wsSize){
+					page_fault_handler(faulted_env, fault_va);
 				}
-				
+				else{
+					int perms = pt_get_page_permissions(faulted_env->env_page_directory, faulted_env->page_last_WS_element);
+					
+					if(perms != -1)
+					{
+						if(perms != PERM_PRESENT){
+							clearPresent(faulted_env);
+							struct FrameInfo *frame_info;
+							allocate_frame(&frame_info);
+							map_frame(faulted_env->env_page_directory, frame_info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_WRITEABLE| PERM_USER);
+						}
+					}
+					
+				}
 			}
-		}
-		else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
-		{
-			// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #2 LRU Aging Replacement
-			// Your code is here
-			// Comment the following line
-			panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
-		}
-		else if (isPageReplacmentAlgorithmModifiedCLOCK())
-		{
-			// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
-			// Your code is here
-			// Comment the following line
-			panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
+			{
+				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #2 LRU Aging Replacement
+				// Your code is here
+				// Comment the following line
+				panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+			}
+			else if (isPageReplacmentAlgorithmModifiedCLOCK())
+			{
+				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
+				// Your code is here
+				// Comment the following line
+				panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+			}
 		}
 	}
+#else
+	int iWS = faulted_env->page_last_WS_index;
+	uint32 wsSize = env_page_ws_get_size(faulted_env);
+#endif
+
+	
 }
 
 
