@@ -376,6 +376,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				struct WorkingSetElement* victim =  clearUsed(faulted_env);
 
 				int perms = pt_get_page_permissions(faulted_env->env_page_directory, victim->virtual_address);
+				int status = (perms & PERM_MODIFIED)? 1: 0;
 				
 				env_page_ws_print(faulted_env);
 				struct FrameInfo *frame_info;
