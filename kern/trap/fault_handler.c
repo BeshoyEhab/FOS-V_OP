@@ -371,42 +371,59 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 			if (isPageReplacmentAlgorithmCLOCK())
 			{
+				cprintf("Start");
 				// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
 				struct WorkingSetElement* victim =  clearUsed(faulted_env);
 
 				int perms = pt_get_page_permissions(faulted_env->env_page_directory, victim->virtual_address);
-			
+				int status = (perms & PERM_MODIFIED)? 1: 0;
+				
+				env_page_ws_print(faulted_env);
 				struct FrameInfo *frame_info;
 				uint32 *ptr_page_table;
 				get_page_table(faulted_env->env_page_directory, victim->virtual_address, &ptr_page_table);
 				
 				if(ptr_page_table == NULL) {
-                	env_exit();
+					env_exit();
             	}
-
+				
 				pf_update_env_page(faulted_env, victim->virtual_address, frame_info);
-
-				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
-
-				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
-
-				struct FrameInfo *new_frame;
-				allocate_frame(&new_frame);
-
-				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT);
-
-				 int read_result = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-
+				
+				int read_result = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+				
 				if (read_result == E_PAGE_NOT_EXIST_IN_PF) {
 					if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || 
-						(ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP))) {
+					(ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP))) {
 						env_exit();
 					}
 				}
+				
+				struct FrameInfo *new_frame;
+				allocate_frame(&new_frame);
+				if(new_frame == NULL){
+					env_exit();
+				}
+				/*
+					3 ->0
+					7 ->1 <-
+					5 ->0 
+					6 ->0
+				*/
 
+				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
+				
+				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
+				
 				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-            	LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_element);
+				if(LIST_NEXT(victim) == NULL){
+					LIST_INSERT_HEAD(&(faulted_env->page_WS_list), new_element);
+				} else{
+					LIST_INSERT_AFTER(&(faulted_env->page_WS_list), victim, new_element);
+				}
+				faulted_env->page_last_WS_element = new_element;
+				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
 				kfree(victim);
+				env_page_ws_print(faulted_env);
 			}
 			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
 			{
