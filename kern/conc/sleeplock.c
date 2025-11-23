@@ -27,17 +27,23 @@ void init_sleeplock(struct sleeplock *lk, char *name)
 void acquire_sleeplock(struct sleeplock *lk)
 {
 	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #4 SLEEP LOCK - acquire_sleeplock
-	//Your code is here
-	//Comment the following line
-	panic("acquire_sleeplock() is not implemented yet...!!");
+	acquire_kspinlock(&(lk->lk));
+	while (lk->locked) {
+		sleep(&(lk->chan), &(lk->lk));
+	}
+	lk->locked = 1;
+	lk->pid = get_cpu_proc()->env_id; // For debugging if someone need it
+	release_kspinlock(&(lk->lk));
 }
 
 void release_sleeplock(struct sleeplock *lk)
 {
 	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #5 SLEEP LOCK - release_sleeplock
-	//Your code is here
-	//Comment the following line
-	panic("release_sleeplock() is not implemented yet...!!");
+	acquire_kspinlock(&(lk->lk));
+	lk->locked = 0;
+	lk->pid = 0; // For debugging if someone need it
+	wakeup_all(&(lk->chan));
+	release_kspinlock(&(lk->lk));
 }
 
 int holding_sleeplock(struct sleeplock *lk)
