@@ -472,7 +472,85 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
 				// Your code is here
 				// Comment the following line
-				panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
+				if(!elem){
+					elem = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
+
+				struct WorkingSetElement *victim = NULL;
+				int found = 0;
+				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
+
+				//trial 1
+				for(int i =0; i<ws_size, i++){
+					uint32 va = elem->virtual_address;
+					int perms = pt_get_page_permissions(faulted_env->env_page_directory,va);
+					int used = (perms & PERM_USED) ? 1:0;
+					int modified = (perms & PERM_MODIFIED) ? 1:0;
+
+					if(!used && !modified){
+						victim = elem;
+						found = 1;
+						break;
+					}
+
+					elem = LIST_NEXT(elem);
+					if(!elem){
+						elem = LIST_FIRST(&(faulted_env->page_WS_list));
+					}
+				}
+
+				//trial 2
+				if (!found){
+					for (int i = 0; i < ws_size; i++){
+						uint32 va = elem->virtual_address;
+						int perms = pt_get_page_permissions(faulted_env->env_page_directory, va, 0, PERM_MODIFIED);
+						int used = (perm & PERM_USED) ? 1:0;
+						int modified = (perms & PERM_MODIFIED) ? 1:0;
+						
+						if (!used && modified){
+							victim = elem;
+							found = 1;
+							break;
+						}
+
+						if (used){
+							pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
+						}
+
+						elem = LIST_NEXT(elem);
+						if(!elem){
+							LIST_FIRST(&(faulted_env->page_WS_list));
+						}
+
+					}
+				}
+
+				if (victim) {
+					struct FrameInfo *frame;
+					allocate_frame(&frame);
+					map_frame(faulted_env->env_page_directory, frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
+
+					int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+					if (read_page == E_PAGE_NOT_EXIST_IN_PF){
+						env_exit();
+					}
+
+					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env,ROUNDDOWN(fault_va, PAGE_SIZE));
+
+					LIST_INSERT_AFTER(&(faulted_env->page_WS_list),victim);
+					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
+
+					faulted_env->page_last_WS_element = LIST_NEXT(new_elem);
+					if (!faulted_env->page_last_WS_element){
+						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+					} 
+	
+				} else {
+					panic("Modified Clock Replacement: No victim found, something went wrong!")
+				}
+				
+				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 			}
 		}
 	}
