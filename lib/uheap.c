@@ -3,7 +3,15 @@
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
+struct free_Upages_segments free_Upages_segments;
+struct allocated_Upages_segments allocated_Upages_segments;
 
+void *custom_fit(uint32 required_pages);
+uint32 split_segment(struct uheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
+
+//*
+static struct uheapPageSegment usegment_pool[MAX_SEGMENTS];
+static int usegment_pool_used[MAX_SEGMENTS];
 //==============================================
 // [1] INITIALIZE USER HEAP:
 //==============================================
@@ -46,6 +54,137 @@ void return_page(void *va)
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
 
+//* i DO NOT know what is this function DO
+static struct uheapPageSegment *allocate_segment_struct(void)
+{
+	for (int i = 0; i < MAX_SEGMENTS; ++i)
+	{
+		if (!usegment_pool_used[i])
+		{
+			usegment_pool_used[i] = 1;
+			usegment_pool[i].prev_next_info.le_next = NULL;
+			usegment_pool[i].prev_next_info.le_prev = NULL;
+			usegment_pool[i].pageCount = 0;
+			usegment_pool[i].startPage_va = 0;
+			return &usegment_pool[i];
+		}
+	}
+	return NULL;
+}
+
+//* Split a segment into two segments
+uint32 split_segment(struct uheapPageSegment *segment, uint32 size, uint32 *out_va)
+{
+	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
+
+	if (segment == NULL || segment->pageCount < required_pages)
+		return 1;
+
+	struct uheapPageSegment *new_segment = allocate_segment_struct();
+	if (new_segment == NULL)
+		return 1;
+
+	new_segment->pageCount = required_pages;
+	new_segment->startPage_va = segment->startPage_va;
+	segment->startPage_va = segment->startPage_va + required_pages * PAGE_SIZE;
+	segment->pageCount = segment->pageCount - required_pages;
+
+	// REMOVE THIS LINE:
+	sys_allocate_user_mem(new_segment->startPage_va, size);
+
+	LIST_INSERT_TAIL(&allocated_Upages_segments, new_segment);
+	*out_va = new_segment->startPage_va;
+	return 0;
+}
+
+//* Custom fit strategy implementation
+void *custom_fit(uint32 size)
+{
+
+	if (size == 0)
+		return NULL;
+
+	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
+
+	// means that no free segments and no enough space to break
+	if (LIST_EMPTY(&free_Upages_segments) && uheapPageAllocBreak + required_pages * PAGE_SIZE > USER_HEAP_MAX)
+	{
+		return NULL;
+	}
+
+	struct uheapPageSegment *segment = NULL;
+	//* Exact-fit
+	LIST_FOREACH(segment, &free_Upages_segments)
+	{
+		if (segment->pageCount == required_pages)
+		{
+			sys_allocate_user_mem(segment->startPage_va, size);
+			LIST_REMOVE(&free_Upages_segments, segment);
+			LIST_INSERT_TAIL(&allocated_Upages_segments, segment);
+			return (void *)segment->startPage_va;
+		}
+	}
+
+	//* Worst-fit
+	struct uheapPageSegment *max_sized_segment = NULL;
+	LIST_FOREACH(segment, &free_Upages_segments)
+	{
+		if (segment->pageCount >= required_pages)
+		{
+			if (max_sized_segment == NULL || segment->pageCount > max_sized_segment->pageCount)
+			{
+				max_sized_segment = segment;
+			}
+		}
+	}
+
+	if (max_sized_segment != NULL)
+	{
+		uint32 result_va;
+		uint32 split_status = split_segment(max_sized_segment, size, &result_va);
+		if (split_status == 1)
+		{
+			return NULL;
+		}
+		// sys_allocate_user_mem(result_va, size);
+		return (void *)result_va;
+	}
+
+	//* Break-update
+	if ((uheapPageAllocBreak + (required_pages * PAGE_SIZE)) <= USER_HEAP_MAX)
+	{
+
+		uint32 new_break = uheapPageAllocBreak + required_pages * PAGE_SIZE;
+
+		// Check for break overflow
+		if (new_break < uheapPageAllocBreak || new_break > USER_HEAP_MAX)
+		{
+			return NULL;
+		}
+
+		struct uheapPageSegment *newseg = allocate_segment_struct();
+		if (newseg == NULL)
+		{
+			return NULL;
+		}
+
+		newseg->pageCount = required_pages;
+		newseg->startPage_va = uheapPageAllocBreak;
+
+		//* Allocate user memory for the new segment
+		sys_allocate_user_mem(newseg->startPage_va, size);
+
+		uheapPageAllocBreak = new_break;
+
+		LIST_INSERT_TAIL(&allocated_Upages_segments, newseg);
+
+		return (void *)newseg->startPage_va;
+	}
+
+	return NULL;
+	// TODO: **ERROR** can not allocate return 1
+}
+
 //=================================
 // [1] ALLOCATE SPACE IN USER HEAP:
 //=================================
@@ -59,8 +198,18 @@ void *malloc(uint32 size)
 	//==============================================================
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #1 malloc
 	// Your code is here
+	// if the size is less than or equal to the max block size allocate using the dynamic allocator
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
+	{
+		return alloc_block(size);
+	}
+	// Convert given size from bytes to pages
+
+	void *result = custom_fit(size);
+
+	return result;
 	// Comment the following line
-	panic("malloc() is not implemented yet...!!");
+	// panic("malloc() is not implemented yet...!!");
 }
 
 //=================================
