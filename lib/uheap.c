@@ -6,6 +6,8 @@
 struct free_Upages_segments free_Upages_segments;
 struct allocated_Upages_segments allocated_Upages_segments;
 
+#define MAX_SEGMENTS 1048576
+
 void *custom_fit(uint32 required_pages);
 uint32 split_segment(struct uheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
 
@@ -27,6 +29,9 @@ void uheap_init()
 
 		__firstTimeFlag = 0;
 	}
+
+	LIST_INIT(&free_Upages_segments);
+	LIST_INIT(&allocated_Upages_segments);
 }
 
 //==============================================

@@ -24,11 +24,11 @@ void free(void *virtual_address);
 void sfree(void *virtual_address);
 void *realloc(void *virtual_address, uint32 new_size);
 //=================================================================
-LIST_HEAD(free_upages_segments, uheapPageSegment);
-LIST_HEAD(allocated_upages_segments, uheapPageSegment);
+LIST_HEAD(free_Upages_segments, uheapPageSegment);
+LIST_HEAD(allocated_Upages_segments, uheapPageSegment);
 
-extern struct free_upages_segments free_upages_segments;
-extern struct allocated_upages_segments allocated_upages_segments;
+extern struct free_Upages_segments free_Upages_segments;
+extern struct allocated_Upages_segments allocated_Upages_segments;
 struct uheapPageSegment
 {
     LIST_ENTRY(uheapPageSegment)
