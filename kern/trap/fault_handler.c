@@ -270,343 +270,7 @@ void table_fault_handler(struct Env *curenv, uint32 fault_va)
 	}
 #endif
 }
-			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
-			{
-				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #2 LRU Aging Replacement
-				// Your code is here
-				// Comment the following line
 
-				struct WorkingSetElement *elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				struct WorkingSetElement *victim = NULL;
-
-				//aging updater
-				while (elem != NULL){
-					uint32 va = elem->virtual_address;
-
-					int perms = pt_get_page_permissions(faulted_env->env_page_directory, va);
-					int used = (perms & PERM_USED) ? 1:0;
-
-					elem->time_stamp = elem->time_stamp >> 1;
-					elem->time_stamp |= (used << 31);
-
-					if (used){ 
-						pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
-					}
-
-					elem = LIST_NEXT(elem);
-				}
-
-				//min called victim
-				elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				uint32 min_time = 0xFFFFFFFF;
-
-				while(elem != NULL){
-					if (elem->time_stamp < min_time){
-						min_time = elem->time_stamp;
-						victim = elem;
-					}
-					elem = LIST_NEXT(elem);
-				}
-
-				if (victim == NULL){panic("LRU: no victim found");}
-
-				{
-					uint32 vva = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
-					int vperms = pt_get_page_permissions(faulted_env->env_page_directory, vva);
-					if(vperms == -1){
-						panic("LRU: permissions faild for vctm");
-					}
-
-					if(vperms & PERM_MODIFIED){
-						if (pf_update_env_page(faulted_env, vva)<0){
-							panic("LRC: faild to write");
-						}
-					}
-				}
-
-
-				//del vctm
-				if (victim != NULL){
-					unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
-					LIST_REMOVE(&(faulted_env->page_			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
-			{
-				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #2 LRU Aging Replacement
-				// Your code is here
-				// Comment the following line
-
-				struct WorkingSetElement *elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				struct WorkingSetElement *victim = NULL;
-
-				//aging updater
-				while (elem != NULL){
-					uint32 va = elem->virtual_address;
-
-					int perms = pt_get_page_permissions(faulted_env->env_page_directory, va);
-					int used = (perms & PERM_USED) ? 1:0;
-
-					elem->time_stamp = elem->time_stamp >> 1;
-					elem->time_stamp |= (used << 31);
-
-					if (used){ 
-						pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
-					}
-
-					elem = LIST_NEXT(elem);
-				}
-
-				//min called victim
-				elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				uint32 min_time = 0xFFFFFFFF;
-
-				while(elem != NULL){
-					if (elem->time_stamp < min_time){
-						min_time = elem->time_stamp;
-						victim = elem;
-					}
-					elem = LIST_NEXT(elem);
-				}
-
-				if (victim == NULL){panic("LRU: no victim found");}
-
-				{
-					uint32 vva = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
-					int vperms = pt_get_page_permissions(faulted_env->env_page_directory, vva);
-					if(vperms == -1){
-						panic("LRU: permissions faild for vctm");
-					}
-
-					if(vperms & PERM_MODIFIED){
-						if (pf_update_env_page(faulted_env, vva)<0){
-							panic("LRC: faild to write");
-						}
-					}
-				}
-
-
-				//del vctm
-				if (victim != NULL){
-					unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
-					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
-				}
-
-				{
-					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-					if (!new_elem) panic("LRU: failed to create WS element");
-					
-				}
-
-				//add new frame
-				struct FrameInfo *new_frame;
-				allocate_frame(&new_frame);
-
-				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT | PERM_WRITEABLE | PERM_USED);
-				
-
-				
-				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
-
-				if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size){
-					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-				}
-
-				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
-			}
-			else if (isPageReplacmentAlgorithmModifiedCLOCK()){
-				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
-				// Your code is here
-				// Comment the following line
-				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
-				if(!elem){
-					elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				}
-
-				struct WorkingSetElement *victim = NULL;
-				int found = 0;
-				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
-
-				//trial 1
-				for(int i =0; i<ws_size, i++){
-					uint32 va = elem->virtual_address;
-					int perms = pt_get_page_permissions(faulted_env->env_page_directory,va);
-					int used = (perms & PERM_USED) ? 1:0;
-					int modified = (perms & PERM_MODIFIED) ? 1:0;
-
-					if(!used && !modified){
-						victim = elem;
-						found = 1;
-						break;
-					}
-
-					elem = LIST_NEXT(elem);
-					if(!elem){
-						elem = LIST_FIRST(&(faulted_env->page_WS_list));
-					}
-				}
-
-				//trial 2
-				if (!found){
-					for (int i = 0; i < ws_size; i++){
-						uint32 va = elem->virtual_address;
-						int perms = pt_get_page_permissions(faulted_env->env_page_directory, va, 0, PERM_MODIFIED);
-						int used = (perm & PERM_USED) ? 1:0;
-						int modified = (perms & PERM_MODIFIED) ? 1:0;
-						
-						if (!used && modified){
-							victim = elem;
-							found = 1;
-							break;
-						}
-
-						if (used){
-							pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
-						}
-
-						elem = LIST_NEXT(elem);
-						if(!elem){
-							LIST_FIRST(&(faulted_env->page_WS_list));
-						}
-
-					}
-				}
-
-				if (victim) {
-					struct FrameInfo *frame;
-					allocate_frame(&frame);
-					map_frame(faulted_env->env_page_directory, frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
-
-					int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-					if (read_page == E_PAGE_NOT_EXIST_IN_PF){
-						env_exit();
-					}
-
-					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env,ROUNDDOWN(fault_va, PAGE_SIZE));
-
-					LIST_INSERT_AFTER(&(faulted_env->page_WS_list),victim);
-					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
-
-					faulted_env->page_last_WS_element = LIST_NEXT(new_elem);
-					if (!faulted_env->page_last_WS_element){
-						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-					} 
-	
-				} else {
-					panic("Modified Clock Replacement: No victim found, something went wrong!")
-				}
-				
-				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
-			}
-		}
-	}WS_list),victim);
-				}
-
-				{
-					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-					if (!new_elem) panic("LRU: failed to create WS element");
-					
-				}
-
-				//add new frame
-				struct FrameInfo *new_frame;
-				allocate_frame(&new_frame);
-
-				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT | PERM_WRITEABLE | PERM_USED);
-				
-
-				
-				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
-
-				if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size){
-					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-				}
-
-				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
-			}
-			else if (isPageReplacmentAlgorithmModifiedCLOCK()){
-				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
-				// Your code is here
-				// Comment the following line
-				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
-				if(!elem){
-					elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				}
-
-				struct WorkingSetElement *victim = NULL;
-				int found = 0;
-				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
-
-				//trial 1
-				for(int i =0; i<ws_size, i++){
-					uint32 va = elem->virtual_address;
-					int perms = pt_get_page_permissions(faulted_env->env_page_directory,va);
-					int used = (perms & PERM_USED) ? 1:0;
-					int modified = (perms & PERM_MODIFIED) ? 1:0;
-
-					if(!used && !modified){
-						victim = elem;
-						found = 1;
-						break;
-					}
-
-					elem = LIST_NEXT(elem);
-					if(!elem){
-						elem = LIST_FIRST(&(faulted_env->page_WS_list));
-					}
-				}
-
-				//trial 2
-				if (!found){
-					for (int i = 0; i < ws_size; i++){
-						uint32 va = elem->virtual_address;
-						int perms = pt_get_page_permissions(faulted_env->env_page_directory, va, 0, PERM_MODIFIED);
-						int used = (perm & PERM_USED) ? 1:0;
-						int modified = (perms & PERM_MODIFIED) ? 1:0;
-						
-						if (!used && modified){
-							victim = elem;
-							found = 1;
-							break;
-						}
-
-						if (used){
-							pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
-						}
-
-						elem = LIST_NEXT(elem);
-						if(!elem){
-							LIST_FIRST(&(faulted_env->page_WS_list));
-						}
-
-					}
-				}
-
-				if (victim) {
-					struct FrameInfo *frame;
-					allocate_frame(&frame);
-					map_frame(faulted_env->env_page_directory, frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
-
-					int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-					if (read_page == E_PAGE_NOT_EXIST_IN_PF){
-						env_exit();
-					}
-
-					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env,ROUNDDOWN(fault_va, PAGE_SIZE));
-
-					LIST_INSERT_AFTER(&(faulted_env->page_WS_list),victim);
-					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
-
-					faulted_env->page_last_WS_element = LIST_NEXT(new_elem);
-					if (!faulted_env->page_last_WS_element){
-						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-					} 
-	
-				} else {
-					panic("Modified Clock Replacement: No victim found, something went wrong!")
-				}
-				
-				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
-			}
-		}
-	}
 //=========================
 // [3] PAGE FAULT HANDLER:
 //=========================
@@ -621,9 +285,6 @@ void table_fault_handler(struct Env *curenv, uint32 fault_va)
 int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct PageRef_List *pageReferences)
 {
 	// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #2 get_optimal_num_faults
-	// Your code is here
-	// Comment the following line
-	// panic("get_optimal_num_faults() is not implemented yet...!!");
 }
 
 //=============================
@@ -634,31 +295,26 @@ struct WorkingSetElement* clearUsed(struct Env *faulted_env){
 	if(i == NULL){
 		i = LIST_FIRST(&(faulted_env->page_WS_list));
 	}
-
+	
 	while(1){
-
 		uint32 element_va = i->virtual_address;
 		int perms = pt_get_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(element_va, PAGE_SIZE));
 		if(perms == -1){
 			env_exit();
 		}
-
+		
 		if((perms & PERM_USED) == 0)
 		{
-			faulted_env->page_last_WS_element = LIST_NEXT(i);
-			if(faulted_env->page_last_WS_element == NULL){
-				faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-			}
 			return i;
 		}
-
+		
 		pt_set_page_permissions(faulted_env->env_page_directory, element_va, 0, PERM_USED);
 		i = LIST_NEXT(i);
-
+		
 		if(i == NULL){
-		i = LIST_FIRST(&faulted_env->page_WS_list); 
-	}
-
+			i = LIST_FIRST(&faulted_env->page_WS_list); 
+		}
+		
 	}
 }
 
@@ -670,6 +326,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 #if USE_KHEAP
 	struct WorkingSetElement *victimWSElement = NULL;
 	uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
+	cprintf("\nThe Working Set Size: %d\n", wsSize);
 
 	if (wsSize < (faulted_env->page_WS_max_size))
 	{
@@ -707,26 +364,27 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 			if (isPageReplacmentAlgorithmCLOCK())
 			{
-				cprintf("Start");
 				// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
 				struct WorkingSetElement* victim =  clearUsed(faulted_env);
+				// cprintf("\n==============\nThe working set before the edit: \n\n");
+				// env_page_ws_print(faulted_env);
+				// cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
+				
+				//Get frame info for the victim to be able to unmap it
+				struct FrameInfo *victim_frame_info;
+				uint32 *victim_ptr_page_table;
 
-				int perms = pt_get_page_permissions(faulted_env->env_page_directory, victim->virtual_address);
-				int status = (perms & PERM_MODIFIED)? 1: 0;
+				cprintf('\n\nBefore Getting the page table\n\n');
+				get_page_table(faulted_env->env_page_directory, victim->virtual_address, &victim_ptr_page_table);
+				cprintf('\n\nAfter Getting the page table\n\n');
 				
-				env_page_ws_print(faulted_env);
-				struct FrameInfo *frame_info;
-				uint32 *ptr_page_table;
-				get_page_table(faulted_env->env_page_directory, victim->virtual_address, &ptr_page_table);
-				
-				if(ptr_page_table == NULL) {
+				if(victim_ptr_page_table == NULL) {
 					env_exit();
-            	}
+        		}
 				
-				pf_update_env_page(faulted_env, victim->virtual_address, frame_info);
-				
-				int read_result = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-
+				cprintf('\n\nBefore Reading from Disk\n\n');
+				int read_result = pf_read_env_page(faulted_env, fault_va);
+				cprintf('\n\nAfter Reading from Disk\n\n');
 				
 				if (read_result == E_PAGE_NOT_EXIST_IN_PF) {
 					if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || 
@@ -735,33 +393,39 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					}
 				}
 				
-				struct FrameInfo *new_frame;
-				allocate_frame(&new_frame);
-				if(new_frame == NULL){
+				struct FrameInfo *new_element_frame;
+				allocate_frame(&new_element_frame);
+				
+				if(new_element_frame == NULL){
 					env_exit();
 				}
+
+				faulted_env->page_last_WS_element = LIST_NEXT(victim);
+				if(faulted_env->page_last_WS_element == NULL){
+					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
+
+				pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
 				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
-				
-				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
+				map_frame(faulted_env->env_page_directory, new_element_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
 				
 				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-				
 				if(LIST_NEXT(victim) == NULL){
 					LIST_INSERT_HEAD(&(faulted_env->page_WS_list), new_element);
 				} else{
 					LIST_INSERT_AFTER(&(faulted_env->page_WS_list), victim, new_element);
 				}
+
 				faulted_env->page_last_WS_element = new_element;
 				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
 				kfree(victim);
-				env_page_ws_print(faulted_env);
 			}
 			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
 			{
 				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #2 LRU Aging Replacement
 				// Your code is here
 				// Comment the following line
-
+				
 				struct WorkingSetElement *elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				struct WorkingSetElement *victim = NULL;
 
@@ -781,8 +445,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 					elem = LIST_NEXT(elem);
 				}
-
-				//min called victim
+				
+				//aging update (with vva)
 				elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				uint32 min_time = 0xFFFFFFFF;
 
@@ -794,133 +458,136 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					elem = LIST_NEXT(elem);
 				}
 
-				if (victim == NULL){panic("LRU: no victim found");}
-
-				{
-					uint32 vva = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
-					int vperms = pt_get_page_permissions(faulted_env->env_page_directory, vva);
-					if(vperms == -1){
-						panic("LRU: permissions faild for vctm");
-					}
-
-					if(vperms & PERM_MODIFIED){
-						if (pf_update_env_page(faulted_env, vva)<0){
-							panic("LRC: faild to write");
-						}
-					}
-				}
-
-
-				//del vctm
+				// unmap victim
 				if (victim != NULL){
 					unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
 					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
 				}
 
-				{
-					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-					if (!new_elem) panic("LRU: failed to create WS element");
-					
-				}
-
-				//add new frame
+				//allocate & map frame for fault_va
 				struct FrameInfo *new_frame;
 				allocate_frame(&new_frame);
 
-				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT | PERM_WRITEABLE | PERM_USED);
-				
+				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va,PAGE_SIZE),PERM_PRESENT|PERM_WRITEABLE|PERM_USED);
 
-				
-				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
+				//add fault_va to ws list
+				struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+				LIST_INSERT_TAIL(&(faulted_env->page_WS_list),new_elem);
 
-				if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size){
-					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+				//update last ws element if needed
+				if(LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size){
+					if(LIST_NEXT(victim) != NULL){
+						faulted_env->page_last_WS_element = LIST_NEXT(victim);}
+					else{
+						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+					}
 				}
 
 				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 			}
-			else if (isPageReplacmentAlgorithmModifiedCLOCK()){
+			else if (isPageReplacmentAlgorithmModifiedCLOCK())
+			{
 				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Modified Clock Replacement
 				// Your code is here
 				// Comment the following line
+
+
+				//Modified Clock Replacement
+
 				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
-				if(!elem){
+
+				if (!elem) {
 					elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				}
 
 				struct WorkingSetElement *victim = NULL;
+
 				int found = 0;
 				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
 
-				//trial 1
-				for(int i =0; i<ws_size, i++){
-					uint32 va = elem->virtual_address;
-					int perms = pt_get_page_permissions(faulted_env->env_page_directory,va);
-					int used = (perms & PERM_USED) ? 1:0;
-					int modified = (perms & PERM_MODIFIED) ? 1:0;
+				//Trial 1
+				for (int i = 0; i < ws_size; i++) {
 
-					if(!used && !modified){
+					uint32 va = elem->virtual_address;
+
+					int perms = pt_get_page_permissions(faulted_env->env_page_directory, va);
+					int used = (perms & PERM_USED) ? 1 : 0;
+					int modified = (perms & PERM_MODIFIED) ? 1 : 0;
+
+					if (!used && !modified) {
 						victim = elem;
 						found = 1;
-						break;
+						break; // best victim found
 					}
 
+					// move to next element circularly
 					elem = LIST_NEXT(elem);
-					if(!elem){
-						elem = LIST_FIRST(&(faulted_env->page_WS_list));
+					if (!elem) elem = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
+
+				//Trial 2
+				if (!found) {
+
+					for (int i = 0; i < ws_size; i++) {
+
+						uint32 va = elem->virtual_address;
+
+						int perms = pt_get_page_permissions(faulted_env->env_page_directory, va);
+						int used = (perms & PERM_USED) ? 1 : 0;
+						int modified = (perms & PERM_MODIFIED) ? 1 : 0;
+
+						if (!used && modified) {
+							victim = elem;
+							found = 1;
+							break; // second best victim
+						}
+
+						// reset Used bit for next trials
+						if (used) {
+							pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
+						}
+						
+						// move circularly
+						elem = LIST_NEXT(elem);
+						if (!elem) elem = LIST_FIRST(&(faulted_env->page_WS_list));
 					}
 				}
 
-				//trial 2
-				if (!found){
-					for (int i = 0; i < ws_size; i++){
-						uint32 va = elem->virtual_address;
-						int perms = pt_get_page_permissions(faulted_env->env_page_directory, va, 0, PERM_MODIFIED);
-						int used = (perm & PERM_USED) ? 1:0;
-						int modified = (perms & PERM_MODIFIED) ? 1:0;
-						
-						if (!used && modified){
-							victim = elem;
-							found = 1;
-							break;
-						}
-
-						if (used){
-							pt_set_page_permissions(faulted_env->env_page_directory, va, 0, PERM_USED);
-						}
-
-						elem = LIST_NEXT(elem);
-						if(!elem){
-							LIST_FIRST(&(faulted_env->page_WS_list));
-						}
-
-					}
+				//Replacement
+				if(!victim){
+					victim = faulted_env->page_last_WS_element;
 				}
 
 				if (victim) {
-					struct FrameInfo *frame;
+					uint32* ptr_page_table;
+					struct FrameInfo *frame = get_frame_info(faulted_env->env_page_directory, victim->virtual_address, &ptr_page_table);
 					allocate_frame(&frame);
-					map_frame(faulted_env->env_page_directory, frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
 
-					int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-					if (read_page == E_PAGE_NOT_EXIST_IN_PF){
-						env_exit();
+					map_frame(faulted_env->env_page_directory, frame, ROUNDDOWN(fault_va, PAGE_SIZE),PERM_PRESENT | PERM_WRITEABLE | PERM_USER);
+
+					int read_page = pf_read_env_page(faulted_env, fault_va);
+					if (read_page == E_PAGE_NOT_EXIST_IN_PF) {
+						panic("ya lahwaaaaaaay");
+						env_exit(); 
 					}
 
-					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env,ROUNDDOWN(fault_va, PAGE_SIZE));
+					
+					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 
-					LIST_INSERT_AFTER(&(faulted_env->page_WS_list),victim);
-					LIST_REMOVE(&(faulted_env->page_WS_list),victim);
+					LIST_INSERT_AFTER(&(faulted_env->page_WS_list), victim, new_elem);
+					LIST_REMOVE(&(faulted_env->page_WS_list), victim);
 
 					faulted_env->page_last_WS_element = LIST_NEXT(new_elem);
-					if (!faulted_env->page_last_WS_element){
+					
+					if (!faulted_env->page_last_WS_element) {
+					
 						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-					} 
-	
+					
+					}
 				} else {
-					panic("Modified Clock Replacement: No victim found, something went wrong!")
+					panic("Modified_Clock No victim found!");
 				}
-				
+
 				//panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 			}
 		}
