@@ -726,6 +726,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				pf_update_env_page(faulted_env, victim->virtual_address, frame_info);
 				
 				int read_result = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+
 				
 				if (read_result == E_PAGE_NOT_EXIST_IN_PF) {
 					if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || 
@@ -739,18 +740,12 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				if(new_frame == NULL){
 					env_exit();
 				}
-				/*
-					3 ->0
-					7 ->1 <-
-					5 ->0 
-					6 ->0
-				*/
-
 				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
 				
 				map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
 				
 				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+				
 				if(LIST_NEXT(victim) == NULL){
 					LIST_INSERT_HEAD(&(faulted_env->page_WS_list), new_element);
 				} else{
