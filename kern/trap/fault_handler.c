@@ -285,6 +285,26 @@ void table_fault_handler(struct Env *curenv, uint32 fault_va)
 int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct PageRef_List *pageReferences)
 {
 	// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #2 get_optimal_num_faults
+	
+	int8 counter = 0;
+	int8 found = 0;
+	struct PageRefElement *iterator;
+	LIST_FOREACH(iterator, pageReferences){
+		struct WorkingSetElement *it;
+		found = 0;
+		LIST_FOREACH(it, initWorkingSet){
+			cprintf("virtual address: %x\n",it->virtual_address);
+			if(iterator->virtual_address == it->virtual_address){
+				found = 1;
+				break;
+			}
+		}
+		if(found){
+			counter++;
+		}
+	}
+
+	return counter;
 }
 
 //=============================
@@ -303,12 +323,12 @@ struct WorkingSetElement* clearUsed(struct Env *faulted_env){
 			env_exit();
 		}
 		
-		if((perms & PERM_USED) == 0)
+		if((perms & PERM_PRESENT) == 0)
 		{
 			return i;
 		}
 		
-		pt_set_page_permissions(faulted_env->env_page_directory, element_va, 0, PERM_USED);
+		pt_set_page_permissions(faulted_env->env_page_directory, element_va, 0, PERM_PRESENT);
 		i = LIST_NEXT(i);
 		
 		if(i == NULL){
@@ -326,7 +346,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 #if USE_KHEAP
 	struct WorkingSetElement *victimWSElement = NULL;
 	uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
-	cprintf("\nThe Working Set Size: %d\n", wsSize);
 
 	if (wsSize < (faulted_env->page_WS_max_size))
 	{
@@ -369,9 +388,30 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		if (isPageReplacmentAlgorithmOPTIMAL())
 		{
 			// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #1 Optimal Reference Stream
-			// Your code is here
-			// Comment the following line
-			panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
+			struct WorkingSetElement* elem;
+			LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
+				// struct PageRefElement *pageRefElement = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
+				// pageRefElement->virtual_address = fault_va;
+				// LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), pageRefElement);
+				LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), elem);
+			}
+
+			if(LIST_SIZE(&(faulted_env->referenceStreamList)) < LIST_SIZE(&(faulted_env->page_WS_list))){
+				
+				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_element);
+			} else {
+				LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
+					pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
+				}
+				LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
+					LIST_REMOVE(&(faulted_env->referenceStreamList), elem);
+				}
+			}
+
+
+			
+			
 		} else {
 
 			if (isPageReplacmentAlgorithmCLOCK())
@@ -488,7 +528,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 				//add fault_va to ws list
 				struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-				LIST_INSERT_TAIL(&(faulted_env->page_WS_list),new_elem);
+				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
 
 				//update last ws element if needed
 				if(LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size){
