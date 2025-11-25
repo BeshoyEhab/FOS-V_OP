@@ -188,8 +188,64 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #4 free_user_mem
 	// Your code is here
+
+	int page_count = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
+
+	uint32 *page_table = NULL;
+
+	for (uint32 va = virtual_address; page_count; page_count--, va += PAGE_SIZE)
+	{
+
+		int ret_page_table = get_page_table(e->env_page_directory, va, &page_table);
+		if (ret_page_table == TABLE_NOT_EXIST)
+		{
+			continue;
+		}
+
+		// unmark pages
+		pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
+
+		// free pages from page file
+		pf_remove_env_page(e, va);
+
+		// TODO: [PROJECT'24.MS2 - BONUS#3] [3] USER HEAP [KERNEL SIDE] - O(1) free_user_mem
+		struct FrameInfo *frame = get_frame_info(e->env_page_directory, va, &page_table);
+		if (!frame)
+		{
+			continue;
+		}
+		// Remove from working set
+		struct WorkingSetElement *ws_element = NULL;
+		LIST_FOREACH(ws_element, &(e->page_WS_list))
+		{
+			if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
+			{
+				//! Section Is Under Test
+
+				if (e->page_last_WS_element == ws_element)
+				{
+					e->page_last_WS_element = LIST_NEXT(ws_element);
+					// If we removed the last element in the list, wrap around to the head
+					if (e->page_last_WS_element == NULL)
+					{
+						e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
+					}
+				}
+
+				//! End Section
+				LIST_REMOVE(&(e->page_WS_list), ws_element);
+				kfree(ws_element);
+				break;
+			}
+		}
+
+		unmap_frame(e->env_page_directory, va);
+
+		// kfree((void *)va);
+	}
+
 	// Comment the following line
-	panic("free_user_mem() is not implemented yet...!!");
+	// panic("free_user_mem() is not implemented yet...!!");
 }
 
 //=====================================

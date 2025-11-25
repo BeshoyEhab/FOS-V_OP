@@ -7,9 +7,13 @@ struct free_Upages_segments free_Upages_segments;
 struct allocated_Upages_segments allocated_Upages_segments;
 
 #define MAX_SEGMENTS 1048576
-
+//*
 void *custom_fit(uint32 required_pages);
 uint32 split_segment(struct uheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
+//*
+struct uheapPageSegment *find_page_segment(uint32 va);
+void merge_free_segments(struct uheapPageSegment *segment);
+int update_break_after_free(void);
 
 //*
 static struct uheapPageSegment usegment_pool[MAX_SEGMENTS];
@@ -94,7 +98,6 @@ uint32 split_segment(struct uheapPageSegment *segment, uint32 size, uint32 *out_
 	segment->startPage_va = segment->startPage_va + required_pages * PAGE_SIZE;
 	segment->pageCount = segment->pageCount - required_pages;
 
-	// REMOVE THIS LINE:
 	sys_allocate_user_mem(new_segment->startPage_va, size);
 
 	LIST_INSERT_TAIL(&allocated_Upages_segments, new_segment);
@@ -220,12 +223,128 @@ void *malloc(uint32 size)
 //=================================
 // [2] FREE SPACE FROM USER HEAP:
 //=================================
+
+struct uheapPageSegment *find_page_segment(uint32 va)
+{
+
+	struct uheapPageSegment *seg_iter = NULL;
+	LIST_FOREACH(seg_iter, &allocated_Upages_segments)
+	{
+		if (seg_iter->startPage_va == va)
+		{
+			return seg_iter;
+		}
+	}
+	return seg_iter;
+}
+
+void merge_free_segments(struct uheapPageSegment *segment)
+{
+	struct uheapPageSegment *seg1 = NULL, *seg2 = NULL;
+	bool merge_down = 0;
+
+	// Check if we can merge with previous segment
+	if (segment->startPage_va > USER_HEAP_START)
+	{
+		LIST_FOREACH(seg1, &free_Upages_segments)
+		{
+			if (seg1->startPage_va + (seg1->pageCount * PAGE_SIZE) == segment->startPage_va)
+			{
+				seg2 = seg1;
+				merge_down = 1;
+				seg1->pageCount += segment->pageCount;
+				break;
+			}
+		}
+	}
+
+	// Check if we can merge with next segment
+	seg1 = NULL;
+	if (!merge_down)
+	{
+		LIST_FOREACH(seg1, &free_Upages_segments)
+		{
+			if (seg1->startPage_va == (segment->startPage_va + (segment->pageCount * PAGE_SIZE)))
+			{
+				seg1->startPage_va = segment->startPage_va;
+				seg1->pageCount += segment->pageCount;
+				return;
+			}
+		}
+	}
+	else
+	{
+		LIST_FOREACH(seg1, &free_Upages_segments)
+		{
+			if (seg1->startPage_va == (seg2->startPage_va + (seg2->pageCount * PAGE_SIZE)))
+			{
+				seg1->startPage_va = seg2->startPage_va;
+				seg1->pageCount += seg2->pageCount;
+				LIST_REMOVE(&free_Upages_segments, seg2);
+				return;
+			}
+		}
+	}
+
+	if (merge_down)
+		return;
+
+	LIST_INSERT_HEAD(&free_Upages_segments, segment);
+}
+
+int update_break_after_free(void)
+{
+	struct uheapPageSegment *seg;
+	LIST_FOREACH(seg, &free_Upages_segments)
+	{
+		uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
+		if (seg_end == uheapPageAllocBreak)
+		{
+			uheapPageAllocBreak = seg->startPage_va;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+//=================================
 void free(void *virtual_address)
 {
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #3 free
 	// Your code is here
+	uint32 virtual_address_uint = (uint32)virtual_address;
+	if (virtual_address_uint == 0 || virtual_address_uint < USER_HEAP_START || virtual_address_uint >= USER_HEAP_MAX)
+	{
+		panic("free: invalid virtual address");
+		return;
+	}
+	if (virtual_address_uint >= USER_HEAP_START && virtual_address_uint < USER_HEAP_START + DYN_ALLOC_MAX_SIZE)
+	{
+		free_block(virtual_address);
+		return;
+	}
+	else if (virtual_address_uint >= uheapPageAllocStart && virtual_address_uint < USER_HEAP_MAX)
+	{
+		virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
+
+		struct uheapPageSegment *segment = find_page_segment((uint32)virtual_address);
+		if (segment == NULL)
+		{
+			panic("free: segment not found for the given virtual address");
+			return;
+		}
+
+		// Free the user memory associated with the segment
+		sys_free_user_mem(segment->startPage_va, segment->pageCount * PAGE_SIZE);
+
+		LIST_REMOVE(&allocated_Upages_segments, segment);
+		merge_free_segments(segment);
+		update_break_after_free();
+		return;
+	}
 	// Comment the following line
-	panic("free() is not implemented yet...!!");
+	panic("there is an error in free function");
+	// panic("free() is not implemented yet...!!");
 }
 
 //=================================
