@@ -369,9 +369,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				LIST_REMOVE(&(faulted_env->referenceStreamList), elem);
 			}
 		}
-
-
-		
 		
 	} else{
 
