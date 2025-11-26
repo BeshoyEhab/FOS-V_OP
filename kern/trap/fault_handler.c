@@ -406,8 +406,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
 				
 				//Get frame info for the victim to be able to unmap it
-				struct FrameInfo *victim_frame_info;
-				uint32 *victim_ptr_page_table;
+				struct FrameInfo *victim_frame_info = NULL;
+				uint32 *victim_ptr_page_table = NULL;
 
 				cprintf('\n\nBefore Getting the page table\n\n');
 				get_page_table(faulted_env->env_page_directory, victim->virtual_address, &victim_ptr_page_table);
@@ -417,6 +417,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					env_exit();
         		}
 				
+				//check for if modified first before updating the victim in disk
+
 				cprintf('\n\nBefore Reading from Disk\n\n');
 				int read_result = pf_read_env_page(faulted_env, fault_va);
 				cprintf('\n\nAfter Reading from Disk\n\n');
@@ -440,20 +442,19 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
 				}
 
-				pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
-				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
+				uint32 perms = pt_get_page_permissions(faulted_env->env_page_directory, victim->virtual_address);
+				if((perms & PERM_MODIFIED) != 0) pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
 				map_frame(faulted_env->env_page_directory, new_element_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
 				
 				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-				if(LIST_NEXT(victim) == NULL){
+
+				env_page_ws_invalidate(faulted_env);
+
+				if(faulted_env->page_last_WS_element == NULL){
 					LIST_INSERT_HEAD(&(faulted_env->page_WS_list), new_element);
 				} else{
-					LIST_INSERT_AFTER(&(faulted_env->page_WS_list), victim, new_element);
+					LIST_INSERT_BEFORE(&(faulted_env->page_WS_list), faulted_env->page_last_WS_element, new_element);
 				}
-
-				faulted_env->page_last_WS_element = new_element;
-				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
-				kfree(victim);
 			}
 			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
 			{
@@ -532,7 +533,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// Comment the following line
 
 				//Modified Clock Replacement
-
 				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
 
 				if (!elem) {
