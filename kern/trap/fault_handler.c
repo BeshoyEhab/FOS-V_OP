@@ -361,7 +361,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		struct FrameInfo* new_frame;
 		get_frame_info(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), &new_frame);
 		if(new_frame != NULL){
-			pt_set_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(new_element->virtual_address, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
+			pt_set_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
 		} else{
 			allocate_frame(&new_frame);
 			map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
