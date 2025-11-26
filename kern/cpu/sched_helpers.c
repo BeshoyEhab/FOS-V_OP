@@ -13,11 +13,9 @@
 //void on_clock_update_WS_time_stamps();
 extern void cleanup_buffers(struct Env* e);
 //================
-
 //=================================================================================//
 //============================== QUEUE FUNCTIONS ==================================//
 //=================================================================================//
-
 //================================
 // [1] Initialize the given queue:
 //================================
@@ -155,6 +153,7 @@ void sched_insert_ready(struct Env* env)
 	{
 		//cprintf("\nInserting %d into ready queue 0\n", env->env_id);
 		env->env_status = ENV_READY ;
+		env->env_tick = ticks;
 		enqueue(&(ProcessQueues.env_ready_queues[env->priority]), env);
 	}
 }
@@ -690,15 +689,34 @@ int get_load_average()
 /********* for Priority RR Scheduler *************/
 void env_set_priority(int envID, int priority)
 {
-	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #1 env_set_priority
-	//Your code is here
-	//Comment the following line
-	panic("env_set_priority() is not implemented yet...!!");
+	struct Env *pcb;
+	int i = envid2env(envID,&pcb,0);
+	if (i<0){
+	return;}
+if(priority <0)
+priority =0;
+if(priority >= num_of_ready_queues){
+
+	priority = num_of_ready_queues-1;
+}
+acquire_kspinlock(&ProcessQueues.qlock);
+
+if(pcb->env_status == ENV_READY){
+	sched_remove_ready(pcb);
+	pcb->priority = priority;
+	sched_insert_ready(pcb);
+
+}
+else
+    {
+        pcb->priority = priority;
+    }
+
+release_kspinlock(&ProcessQueues.qlock);
 }
 void sched_set_starv_thresh(uint32 starvThresh)
 {
-	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #1 sched_set_starv_thresh
-	//Your code is here
-	//Comment the following line
-	panic("sched_set_starv_thresh() is not implemented yet...!!");
+acquire_kspinlock(&ProcessQueues.qlock);
+starvation_threshold = starvThresh;
+release_kspinlock(&ProcessQueues.qlock);
 }

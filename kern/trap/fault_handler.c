@@ -417,9 +417,11 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				env_page_ws_print(faulted_env);
 				cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
 				
+
 				// Get victim's frame info using get_frame_info (NOT get_page_table)
 				uint32 *victim_ptr_page_table = NULL;
 				struct FrameInfo *victim_frame_info = get_frame_info(faulted_env->env_page_directory, victim->virtual_address, &victim_ptr_page_table);
+
 				
 				if(victim_frame_info == NULL || victim_ptr_page_table == NULL) {
 					env_exit();
@@ -430,6 +432,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				if(victim_perms & PERM_MODIFIED) {
 					pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
 				}
+
 				
 				// Unmap victim frame
 				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
@@ -462,6 +465,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					next_elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				}
 				faulted_env->page_last_WS_element = next_elem;
+
 			}
 			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
 			{
@@ -540,7 +544,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// Comment the following line
 
 				//Modified Clock Replacement
-
 				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
 
 				if (!elem) {

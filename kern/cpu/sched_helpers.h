@@ -8,6 +8,8 @@
 
 #include <inc/environment_definitions.h>
 
+ extern uint32 starvation_threshold;
+
 /*2023*/
 /********* for BSD Priority Scheduler *************/
 int env_get_nice(struct Env* e) ;
