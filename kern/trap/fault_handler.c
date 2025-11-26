@@ -460,7 +460,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				
 				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 
-				env_page_ws_invalidate(faulted_env);
+				env_page_ws_invalidate(faulted_env, victim->virtual_address);
 
 				if(faulted_env->page_last_WS_element == NULL){
 					LIST_INSERT_HEAD(&(faulted_env->page_WS_list), new_element);
