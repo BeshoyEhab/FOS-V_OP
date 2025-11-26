@@ -417,55 +417,51 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				env_page_ws_print(faulted_env);
 				cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
 				
-				//Get frame info for the victim to be able to unmap it
-				struct FrameInfo *victim_frame_info;
-				uint32 *victim_ptr_page_table;
-
-				cprintf('\n\nBefore Getting the page table\n\n');
-				get_page_table(faulted_env->env_page_directory, victim->virtual_address, &victim_ptr_page_table);
-				cprintf('\n\nAfter Getting the page table\n\n');
+				// Get victim's frame info using get_frame_info (NOT get_page_table)
+				uint32 *victim_ptr_page_table = NULL;
+				struct FrameInfo *victim_frame_info = get_frame_info(faulted_env->env_page_directory, victim->virtual_address, &victim_ptr_page_table);
 				
-				if(victim_ptr_page_table == NULL) {
+				if(victim_frame_info == NULL || victim_ptr_page_table == NULL) {
 					env_exit();
-        		}
+				}
 				
-				cprintf('\n\nBefore Reading from Disk\n\n');
-				int read_result = pf_read_env_page(faulted_env, fault_va);
-				cprintf('\n\nAfter Reading from Disk\n\n');
+				// Check if victim is modified and write back to page file if needed
+				int victim_perms = pt_get_page_permissions(faulted_env->env_page_directory, victim->virtual_address);
+				if(victim_perms & PERM_MODIFIED) {
+					pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
+				}
 				
+				// Unmap victim frame
+				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
+				
+				// Allocate new frame for the faulted page
+				struct FrameInfo *new_element_frame;
+				if(allocate_frame(&new_element_frame) != 0 || new_element_frame == NULL){
+					env_exit();
+				}
+				
+				// Map the new frame at the fault address
+				map_frame(faulted_env->env_page_directory, new_element_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
+				
+				// Read the page content from disk
+				int read_result = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 				if (read_result == E_PAGE_NOT_EXIST_IN_PF) {
-					if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || 
-					(ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP))) {
+					uint32 fault_va_rounded = ROUNDDOWN(fault_va, PAGE_SIZE);
+					if (!((fault_va_rounded >= USER_HEAP_START && fault_va_rounded < USER_HEAP_MAX) || 
+					      (fault_va_rounded >= USTACKBOTTOM && fault_va_rounded < USTACKTOP))) {
 						env_exit();
 					}
 				}
 				
-				struct FrameInfo *new_element_frame;
-				allocate_frame(&new_element_frame);
+				// Update the victim element's virtual address to point to the new page
+				victim->virtual_address = ROUNDDOWN(fault_va, PAGE_SIZE);
 				
-				if(new_element_frame == NULL){
-					env_exit();
+				// Update page_last_WS_element to the next element after victim (circular)
+				struct WorkingSetElement *next_elem = LIST_NEXT(victim);
+				if(next_elem == NULL){
+					next_elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				}
-
-				faulted_env->page_last_WS_element = LIST_NEXT(victim);
-				if(faulted_env->page_last_WS_element == NULL){
-					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-				}
-
-				pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
-				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
-				map_frame(faulted_env->env_page_directory, new_element_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
-				
-				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-				if(LIST_NEXT(victim) == NULL){
-					LIST_INSERT_HEAD(&(faulted_env->page_WS_list), new_element);
-				} else{
-					LIST_INSERT_AFTER(&(faulted_env->page_WS_list), victim, new_element);
-				}
-
-				faulted_env->page_last_WS_element = new_element;
-				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
-				kfree(victim);
+				faulted_env->page_last_WS_element = next_elem;
 			}
 			else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_TIME_APPROX))
 			{
