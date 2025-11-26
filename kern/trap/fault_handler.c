@@ -323,12 +323,12 @@ struct WorkingSetElement* clearUsed(struct Env *faulted_env){
 			env_exit();
 		}
 		
-		if((perms & PERM_PRESENT) == 0)
+		if((perms & PERM_USED) == 0)
 		{
 			return i;
 		}
 		
-		pt_set_page_permissions(faulted_env->env_page_directory, element_va, 0, PERM_PRESENT);
+		pt_set_page_permissions(faulted_env->env_page_directory, element_va, 0, PERM_USED);
 		i = LIST_NEXT(i);
 		
 		if(i == NULL){
@@ -347,59 +347,57 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 	struct WorkingSetElement *victimWSElement = NULL;
 	uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
 
-	if (wsSize < (faulted_env->page_WS_max_size))
+	if (isPageReplacmentAlgorithmOPTIMAL())
 	{
-		// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
-		// Your code is here
-		struct FrameInfo *ptr_Frame_Info;
-		allocate_frame(&ptr_Frame_Info);
-		map_frame(faulted_env->env_page_directory, ptr_Frame_Info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT);
-		int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-		if (read_page == E_PAGE_NOT_EXIST_IN_PF)
+		// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #1 Optimal Reference Stream
+		struct WorkingSetElement* elem;
+		LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
+			// struct PageRefElement *pageRefElement = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
+			// pageRefElement->virtual_address = fault_va;
+			// LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), pageRefElement);
+			LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), elem);
+		}
+
+		if(LIST_SIZE(&(faulted_env->referenceStreamList)) < wsSize){
+			struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+			LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_element);
+		} else {
+			LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
+				pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
+			}
+			LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
+				LIST_REMOVE(&(faulted_env->referenceStreamList), elem);
+			}
+		}
+
+
+		
+		
+	} else{
+
+		if (wsSize < (faulted_env->page_WS_max_size))
 		{
-			if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
+			// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
+			// Your code is here
+			struct FrameInfo *ptr_Frame_Info;
+			allocate_frame(&ptr_Frame_Info);
+			map_frame(faulted_env->env_page_directory, ptr_Frame_Info, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT);
+			int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+			if (read_page == E_PAGE_NOT_EXIST_IN_PF)
 			{
-				env_exit();
-			}
-		}
-
-		struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-		LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
-		if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
-		{
-			faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-		}
-	}
-	else
-	{
-
-		if (isPageReplacmentAlgorithmOPTIMAL())
-		{
-			// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #1 Optimal Reference Stream
-			struct WorkingSetElement* elem;
-			LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
-				// struct PageRefElement *pageRefElement = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
-				// pageRefElement->virtual_address = fault_va;
-				// LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), pageRefElement);
-				LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), elem);
-			}
-
-			if(LIST_SIZE(&(faulted_env->referenceStreamList)) < LIST_SIZE(&(faulted_env->page_WS_list))){
-				
-				struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_element);
-			} else {
-				LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
-					pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
-				}
-				LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
-					LIST_REMOVE(&(faulted_env->referenceStreamList), elem);
+				if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
+				{
+					env_exit();
 				}
 			}
 
+			struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+			LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
+			if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
+			{
+				faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+			}
 
-			
-			
 		} else {
 
 			if (isPageReplacmentAlgorithmCLOCK())
