@@ -241,6 +241,7 @@ int sys_calculate_pages_tobe_removed_ready_exit(uint32 WS_or_MEMORY_flag)
 	return calc_no_pages_tobe_removed_from_ready_exit_queues(WS_or_MEMORY_flag);
 }
 
+
 void sys_scarce_memory(void)
 {
 	scarce_memory();
@@ -404,7 +405,10 @@ static int32 sys_getparentenvid(void)
 
 	return cur_env->env_parent_id;
 }
-
+void sys_env_set_priority(int32 envID, int priority)
+{
+    env_set_priority(envID, priority); 
+}
 // Destroy a given environment whatever its state & DON'T place it in EXIT
 // if envid=0, destroy the currently running environment --> schedule the next (if any)
 //
@@ -705,6 +709,11 @@ uint32 syscall(uint32 syscallno, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uin
 
 	case SYS_get_optimal_num_faults:
 		return sys_get_optimal_num_faults();
+
+	case SYS_env_set_priority:
+	    sys_env_set_priority((int32)a1,(int)a2);
+		return 0;
+		break;	
 
 	case NSYSCALLS:
 		return 	-E_INVAL;
