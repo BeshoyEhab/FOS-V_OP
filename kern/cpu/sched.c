@@ -11,6 +11,7 @@
 #include <kern/cpu/cpu.h>
 #include <kern/cpu/picirq.h>
 
+uint32 starvation_threshold =0;
 
 uint32 isSchedMethodRR(){return (scheduler_method == SCH_RR);}
 uint32 isSchedMethodMLFQ(){return (scheduler_method == SCH_MLFQ); }
@@ -221,15 +222,34 @@ void sched_init_BSD(uint8 numOfLevels, uint8 quantum)
 //======================================
 void sched_init_PRIRR(uint8 numOfPriorities, uint8 quantum, uint32 starvThresh)
 {
-	{
-		//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #2 sched_init_PRIRR
-		//Your code is here
-		//Comment the following line
-		panic("sched_init_PRIRR() is not implemented yet...!!");
+	
+		scheduler_method = SCH_PRIRR;
+		starvation_threshold = starvThresh;
+		num_of_ready_queues = numOfPriorities;
+		init_kspinlock(&ProcessQueues.qlock,"queue_lock");
+
+		#if USE_KHEAP
+		sched_delete_ready_queues();
+		uint32 queue_size =ROUNDUP(num_of_ready_queues * sizeof(struct Env_Queue),PAGE_SIZE);
+		uint32 quantum_size = ROUNDUP(num_of_ready_queues * sizeof(uint8),PAGE_SIZE);
+		ProcessQueues.env_ready_queues = (struct Env_Queue*)kmalloc(queue_size);
+		quantums = (uint8*)kmalloc(quantum_size);
+		memset(ProcessQueues.env_ready_queues,0,queue_size);
+		memset(quantums,0,quantum_size);
+
+		#endif
+
+		for (int i =0 ;i < num_of_ready_queues;i++){
+			init_queue(&(ProcessQueues.env_ready_queues[i]));
+			quantums[i]=quantum;
+		}
+		kclock_set_quantum(quantums[0]);
+		mycpu()->scheduler_status = SCH_STOPPED;
 
 
 
-	}
+
+	
 	//=========================================
 	//DON'T CHANGE THESE LINES=================
 	uint16 cnt0 = kclock_read_cnt0_latch() ; //read after write to ensure it's set to the desired value
@@ -310,10 +330,25 @@ struct Env* fos_scheduler_PRIRR()
 	if(!holding_kspinlock(&ProcessQueues.qlock))
 		panic("fos_scheduler_PRIRR: q.lock is not held by this CPU while it's expected to be.");
 	/****************************************************************************************/
-	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #3 fos_scheduler_PRIRR
-	//Your code is here
-	//Comment the following line
-	panic("fos_scheduler_PRIRR() is not implemented yet...!!");
+	
+	struct Env *current_prc = get_cpu_proc();
+	if (current_prc != NULL){
+		current_prc->env_status = ENV_READY;
+		current_prc->env_tick = ticks;
+		enqueue(&(ProcessQueues.env_ready_queues[current_prc->priority]),current_prc);
+		
+	}
+
+	struct Env *next_prc=NULL;
+	for(int i = 0 ; i< num_of_ready_queues -1; i++){
+		if(queue_size(&(ProcessQueues.env_ready_queues[i]))>0){
+			next_prc = dequeue(&(ProcessQueues.env_ready_queues[i]));
+			kclock_set_quantum(quantums[i]);
+			break;
+		}
+	}
+
+	return next_prc;
 }
 
 //========================================
@@ -324,10 +359,30 @@ void clock_interrupt_handler(struct Trapframe* tf)
 {
 	if (isSchedMethodPRIRR())
 	{
-		//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #4 clock_interrupt_handler
-		//Your code is here
-		//Comment the following line
-		panic("clock_interrupt_handler() is not implemented yet...!!");
+		acquire_kspinlock(&ProcessQueues.qlock);
+		struct Env *curr_prc;
+		struct Env *next_prc;
+
+		for(int i = 0 ; i< num_of_ready_queues-1 ;i++){
+			curr_prc = LIST_FIRST(&(ProcessQueues.env_ready_queues[i]));
+
+			while(curr_prc !=NULL){
+				next_prc = curr_prc->prev_next_info.le_next;
+				if((ticks - curr_prc->env_tick)>= starvation_threshold){
+					if(curr_prc->priority > 0){
+					remove_from_queue(&(ProcessQueues.env_ready_queues[i]),curr_prc);
+					curr_prc->priority--;
+					curr_prc->env_tick = ticks;
+					enqueue(&(ProcessQueues.env_ready_queues[curr_prc->priority]),curr_prc);
+					}
+					else{
+						curr_prc->env_tick = ticks;
+					}
+				}
+				curr_prc = next_prc;
+			}
+		}
+		release_kspinlock(&ProcessQueues.qlock);
 
 
 

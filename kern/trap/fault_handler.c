@@ -389,11 +389,23 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			}
 
 			struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+		
+		// Insert BEFORE page_last_WS_element (clock hand) to protect new pages
+		if (faulted_env->page_last_WS_element != NULL)
+		{
+			LIST_INSERT_BEFORE(&(faulted_env->page_WS_list), faulted_env->page_last_WS_element, last_element);
+		}
+		else
+		{
 			LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
-			if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
-			{
-				faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-			}
+		}
+		
+		// Only set page_last_WS_element on the FIRST fill (from empty to full)
+		if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size && faulted_env->page_last_WS_element == NULL)
+		{
+			faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+		}
+
 
 		} else {
 
@@ -401,9 +413,9 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			{
 				// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
 				struct WorkingSetElement* victim =  clearUsed(faulted_env);
-				// cprintf("\n==============\nThe working set before the edit: \n\n");
-				// env_page_ws_print(faulted_env);
-				// cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
+				cprintf("\n==============\nThe working set before the edit: \n\n");
+				env_page_ws_print(faulted_env);
+				cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
 				
 				//Get frame info for the victim to be able to unmap it
 				struct FrameInfo *victim_frame_info = NULL;

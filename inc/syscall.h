@@ -50,8 +50,8 @@ enum
 	SYS_get_optimal_num_faults,
 	SYS_allocate_user_mem,
 	SYS_free_user_mem,
-	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #1 System Calls - Add suitable code here
-	//Your code is here
+	SYS_env_set_priority,
+	
 
 	//=====================================================================
 	NSYSCALLS
