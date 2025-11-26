@@ -351,24 +351,45 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 	{
 		// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #1 Optimal Reference Stream
 		struct WorkingSetElement* elem;
-		LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
-			// struct PageRefElement *pageRefElement = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
-			// pageRefElement->virtual_address = fault_va;
-			// LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), pageRefElement);
-			LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), elem);
+		if(faulted_env->optimal_loaded != 1){
+			LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
+				LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), elem);
+			}
+			faulted_env->optimal_loaded = 1;
 		}
 
-		if(LIST_SIZE(&(faulted_env->referenceStreamList)) < wsSize){
-			struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-			LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_element);
-		} else {
-			LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
+		struct FrameInfo* new_frame;
+		get_frame_info(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), &new_frame);
+		if(new_frame != NULL){
+			pt_set_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(new_element->virtual_address, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
+		} else{
+			allocate_frame(&new_frame);
+			map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
+
+			int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+			if (read_page == E_PAGE_NOT_EXIST_IN_PF)
+			{
+				if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
+				{
+					env_exit();
+				}
+			} 
+		}
+
+		if(LIST_SIZE(&(faulted_env->ActiveOptimalList)) == faulted_env->page_WS_max_size){
+			LIST_FOREACH(elem, &(faulted_env->ActiveOptimalList)){
 				pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
 			}
-			LIST_FOREACH(elem, &(faulted_env->referenceStreamList)){
-				LIST_REMOVE(&(faulted_env->referenceStreamList), elem);
+			LIST_FOREACH(elem, &(faulted_env->ActiveOptimalList)){
+				LIST_REMOVE(&(faulted_env->ActiveOptimalList), elem);
+				kfree(elem);
 			}
-		}
+		} 
+		struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+		LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_element);
+		
+		struct PageRefElement* refElem = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
+		LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), refElem);
 		
 	} else{
 
