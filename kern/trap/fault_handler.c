@@ -198,7 +198,7 @@ void fault_handler(struct Trapframe *tf)
 		{
 			if (fault_va >= USER_TOP)
 			{
-				// cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
+				cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
 				env_exit();
 			}
 
@@ -207,12 +207,13 @@ void fault_handler(struct Trapframe *tf)
 			if (!(perm & PERM_UHPAGE) && fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
 
 			{
-				// cprintf("User process accessing unmarked page in heap. Exiting.\n");
+				cprintf("User process accessing unmarked page in heap. Exiting.\n");
 				env_exit();
 			}
-
+			
 			if ((perm & PERM_PRESENT) && !(perm & PERM_WRITEABLE) && (tf->tf_err & FEC_WR))
 			{
+				// cprintf("\n=============\nUser process accessing unmarked page in heap. Exiting.\n");
 				env_exit();
 			}
 		}
@@ -285,27 +286,69 @@ void table_fault_handler(struct Env *curenv, uint32 fault_va)
 int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct PageRef_List *pageReferences)
 {
 	// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #2 get_optimal_num_faults
+	struct WS_List currentWorkingSet;
+	LIST_INIT(&currentWorkingSet);
+
+	struct WorkingSetElement* copyPTR;
+	LIST_FOREACH(copyPTR, initWorkingSet){
+        LIST_INSERT_TAIL(&currentWorkingSet, copyPTR);
+	}
 	
-	int8 counter = 0;
-	int8 found = 0;
+	uint32 counter = 0;
+	int found = 0;
 	struct PageRefElement *iterator;
 	LIST_FOREACH(iterator, pageReferences){
 		struct WorkingSetElement *it;
-		found = 0;
-		LIST_FOREACH(it, initWorkingSet){
-			cprintf("virtual address: %x\n",it->virtual_address);
+		LIST_FOREACH(it, &currentWorkingSet){
 			if(iterator->virtual_address == it->virtual_address){
 				found = 1;
 				break;
 			}
+
+			if(LIST_SIZE(&currentWorkingSet) < maxWSSize){
+				LIST_INSERT_TAIL(&currentWorkingSet, it);
+				counter++;
+				found = 1;
+				break;
+			}
+
+			struct PageRefElement* ref_count;  
+			it->calling_offset = 1;
+			LIST_FOREACH(ref_count, pageReferences){
+				it->calling_offset++;
+				if(ref_count->virtual_address == it->virtual_address){
+					break;
+				}
+			}
 		}
-		if(found){
-			counter++;
+
+		if(found)
+		continue;
+
+		struct WorkingSetElement* elem;
+		struct WorkingSetElement* furthest;
+		LIST_FOREACH(elem, &currentWorkingSet){
+			if(furthest == NULL){
+				furthest = elem;
+			} else{
+				if(furthest->calling_offset < elem->calling_offset){
+					furthest = elem;
+				}
+			}
+		}
+		LIST_INSERT_BEFORE(&currentWorkingSet, furthest, it);
+		LIST_REMOVE(&currentWorkingSet, furthest);
+		counter++;
+
+		struct WorkingSetElement* zeroingPtr;
+		LIST_FOREACH(zeroingPtr, &currentWorkingSet){
+			zeroingPtr->calling_offset = 0;
 		}
 	}
 
 	return counter;
 }
+
 
 //=============================
 // Helper Functions
@@ -357,40 +400,51 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			}
 			faulted_env->optimal_loaded = 1;
 		}
-
+		
 		struct FrameInfo* new_frame;
+		// cprintf("Getting frame info\n");
 		get_frame_info(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), &new_frame);
+		// cprintf("Got frame info\n");
 		if(new_frame != NULL){
-			pt_set_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
+			pt_set_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_WRITEABLE | PERM_USER, 0);
+			// cprintf("the frame is existing alrady, setting it's present to 1\n");
 		} else{
+			// cprintf("the frame doens't exist and allocating frame is in progress\n");
 			allocate_frame(&new_frame);
 			map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
-
+			
+			// cprintf("allocated the frame and mapped, now reading it from the env page\n");
 			int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 			if (read_page == E_PAGE_NOT_EXIST_IN_PF)
 			{
 				if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
 				{
+					cprintf("Exitting the env");
 					env_exit();
 				}
 			} 
 		}
-
+		
 		if(LIST_SIZE(&(faulted_env->ActiveOptimalList)) == faulted_env->page_WS_max_size){
+			// cprintf("Entered Removal Area\n");
 			LIST_FOREACH(elem, &(faulted_env->ActiveOptimalList)){
 				pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
-			}
-			LIST_FOREACH(elem, &(faulted_env->ActiveOptimalList)){
 				LIST_REMOVE(&(faulted_env->ActiveOptimalList), elem);
+				// cprintf("Removed Element: %x\n", elem->virtual_address);
 				kfree(elem);
 			}
 		} 
+		
 		struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+		// cprintf("Inserting new element into the active optimal list: %x\n", new_element->virtual_address);
 		LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_element);
 		
-		struct PageRefElement* refElem = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
+		// cprintf("Allocating new element using kmalloc\n");
+		struct PageRefElement* refElem = kmalloc(sizeof(struct PageRefElement));
+		if (!refElem) panic("kmalloc failed");
+		memset(refElem, 0, sizeof(struct PageRefElement));
+		refElem->virtual_address = ROUNDDOWN(new_element->virtual_address, PAGE_SIZE);
 		LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), refElem);
-		
 	} else{
 
 		if (wsSize < (faulted_env->page_WS_max_size))
@@ -405,6 +459,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			{
 				if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
 				{
+					cprintf("In the env Exit");
 					env_exit();
 				}
 			}

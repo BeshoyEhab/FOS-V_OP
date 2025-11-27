@@ -308,7 +308,7 @@ void *kmalloc(unsigned int size)
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
 	if (size == 0)
 		return NULL;
-
+	//cprintf("the size is greater than 0 in kmalloc\n");
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
 	{
 		// we need to make lock while allocation
@@ -321,30 +321,36 @@ void *kmalloc(unsigned int size)
 
 		if (!block_lock_is_in_hold)
 			release_kspinlock(&kheap_block_lock);
-
-		if (va != NULL)
+		
+		if (va != NULL){
+			//cprintf("the va is not null it will return the va from the alloc block: %x\n", va);
 			return va;
-		else
+		}
+		else{
+			//cprintf("the va is null it will not return the va from the alloc block\n");
 			return NULL;
+		}
+		
 	}
-
+	
 	bool is_holding_page_lock = holding_kspinlock(&kheap_page_lock);
-
+	
 	if (!is_holding_page_lock)
 	{
 		acquire_kspinlock(&kheap_page_lock);
 	}
-
+	
 	// Convert given size from bytes to pages
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	// struct kheapPagesBlock *block = NULL;
-
+	
 	// TODO: int custom_fit(uint32 required_pages); , return the status 0 sucsess , 1 fail , -1 panic
 	void *result = custom_fit(required_pages);
-
+	
 	if (!is_holding_page_lock)
-		release_kspinlock(&kheap_page_lock);
-
+	release_kspinlock(&kheap_page_lock);
+	
+	//cprintf("the result is not null it will return the va from the custom fit\n");
 	return result;
 
 	// Comment the following line
