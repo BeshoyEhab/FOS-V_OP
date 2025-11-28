@@ -291,63 +291,73 @@ int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct
 
 	struct WorkingSetElement* copyPTR;
 	LIST_FOREACH(copyPTR, initWorkingSet){
-		struct WorkingSetElement* new_elem = kmalloc(sizeof(struct WorkingSetElement));
+		struct WorkingSetElement* new_elem = (struct WorkingSetElement*)kmalloc(sizeof(struct WorkingSetElement));
 		new_elem->virtual_address = copyPTR->virtual_address;
         LIST_INSERT_TAIL(&currentWorkingSet, new_elem);
 	}
 	
 	uint32 counter = 0;
-	int found = 0;
-	struct PageRefElement *iterator;
-	LIST_FOREACH(iterator, pageReferences){
-		struct WorkingSetElement *it;
-		LIST_FOREACH(it, &currentWorkingSet){
-			if(iterator->virtual_address == it->virtual_address){
+	struct PageRefElement *current;
+	LIST_FOREACH(current, pageReferences){
+		int found = 0;
+		struct WorkingSetElement *victim;
+		LIST_FOREACH(victim, &currentWorkingSet){
+			if(current->virtual_address == victim->virtual_address){
 				found = 1;
 				break;
-			}
-
-			if(LIST_SIZE(&currentWorkingSet) < maxWSSize){
-				LIST_INSERT_TAIL(&currentWorkingSet, it);
-				counter++;
-				found = 1;
-				break;
-			}
-
-			struct PageRefElement* ref_count;  
-			it->calling_offset = 1;
-			LIST_FOREACH(ref_count, pageReferences){
-				it->calling_offset++;
-				if(ref_count->virtual_address == it->virtual_address){
-					break;
-				}
 			}
 		}
-
+		
 		if(found)
 		continue;
 
-		struct WorkingSetElement* elem;
-		struct WorkingSetElement* furthest;
-		LIST_FOREACH(elem, &currentWorkingSet){
-			if(furthest == NULL){
-				furthest = elem;
-			} else{
-				if(furthest->calling_offset < elem->calling_offset){
-					furthest = elem;
-				}
-			}
-		}
-		LIST_INSERT_BEFORE(&currentWorkingSet, furthest, it);
-		LIST_REMOVE(&currentWorkingSet, furthest);
 		counter++;
 
-		struct WorkingSetElement* zeroingPtr;
-		LIST_FOREACH(zeroingPtr, &currentWorkingSet){
-			zeroingPtr->calling_offset = 0;
+		if(LIST_SIZE(&currentWorkingSet) < maxWSSize){
+			struct WorkingSetElement* allocated_elem = (struct WorkingSetElement*)kmalloc(sizeof(struct WorkingSetElement));
+			allocated_elem->virtual_address = current->virtual_address;
+			LIST_INSERT_TAIL(&currentWorkingSet, allocated_elem);
+			counter++;
+			found = 1;
+			continue;
+		}
+
+		struct WorkingSetElement* iterator;
+		LIST_FOREACH(iterator, &currentWorkingSet){
+			iterator->calling_offset = 0;
+			struct PageRefElement* ref_count = current->prev_next_info.le_next;  
+			
+			while(ref_count != NULL){
+				iterator->calling_offset++;
+				if(ref_count->virtual_address == iterator->virtual_address){
+					break;
+				}
+				ref_count = ref_count->prev_next_info.le_next;
+			}
+			if(ref_count == NULL)
+			  iterator->calling_offset = 0x7FFFFFFF;
+		}
+
+		struct WorkingSetElement* elem;
+		struct WorkingSetElement* furthest = NULL;
+		LIST_FOREACH(elem, &currentWorkingSet){
+			if(furthest == NULL || furthest->calling_offset < elem->calling_offset){
+				furthest = elem;
+			}
+		}
+
+		struct WorkingSetElement* allocated_elem = (struct WorkingSetElement*)kmalloc(sizeof(struct WorkingSetElement));
+		allocated_elem->virtual_address = current->virtual_address;
+		allocated_elem->calling_offset = 0;
+
+		LIST_INSERT_BEFORE(&currentWorkingSet, furthest, allocated_elem);
+		LIST_REMOVE(&currentWorkingSet, furthest);
+		kfree(furthest);
+
+		if(current->prev_next_info.le_next == NULL){
+			break;
 		}
 	}
-
 	return counter;
 }
 
@@ -395,11 +405,12 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 	if (isPageReplacmentAlgorithmOPTIMAL())
 	{
 		// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #1 Optimal Reference Stream
-		struct WorkingSetElement* elem;
+		struct WorkingSetElement* elem = LIST_FIRST(&(faulted_env->page_WS_list));
 		if(faulted_env->optimal_loaded != 1){
 			LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
 				struct WorkingSetElement* new_elem = kmalloc(sizeof(struct WorkingSetElement));
 				new_elem->virtual_address = elem->virtual_address;
+				new_elem->calling_offset = 0;
 				LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_elem);
 			}
 			faulted_env->optimal_loaded = 1;
@@ -427,29 +438,36 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		}
 		
 		if(LIST_SIZE(&(faulted_env->ActiveOptimalList)) == faulted_env->page_WS_max_size){
-			LIST_FOREACH(elem, &(faulted_env->ActiveOptimalList)){
-				pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
-				LIST_REMOVE(&(faulted_env->ActiveOptimalList), elem);
-				kfree(elem);
+			struct WorkingSetElement* free_elem = LIST_FIRST(&(faulted_env->ActiveOptimalList));
+			LIST_FOREACH_SAFE(free_elem, &(faulted_env->ActiveOptimalList), WS_List){
+				pt_set_page_permissions(faulted_env->env_page_directory, free_elem->virtual_address, 0, PERM_PRESENT);
+				LIST_REMOVE(&(faulted_env->ActiveOptimalList), free_elem);
+				kfree(free_elem);
 			}
 
 		} 
 		
-		struct WorkingSetElement* ins_elem;
-		uint32* foundInActiveList = 0;
-		LIST_FOREACH(ins_elem, &(faulted_env->ActiveOptimalList)){
+		struct WorkingSetElement* ins_elem = LIST_FIRST(&faulted_env->ActiveOptimalList);
+		uint32 foundInActiveList = 0;
+		while(ins_elem != NULL){
 			if(ins_elem->virtual_address == fva){
 				foundInActiveList = 1;
 				break;
-			};
-		}	
+			};	
+			ins_elem = ins_elem->prev_next_info.le_next;
+		}
+
 		struct WorkingSetElement* new_element;
 		if(!foundInActiveList){
 			new_element = env_page_ws_list_create_element(faulted_env, fva);
+			if(new_element == NULL){
+				cprintf("failed to create element at %x\n", fva);
+			}
 			LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_element);
 		}
-		
-		struct PageRefElement* refElem = kmalloc(sizeof(struct PageRefElement));
+
+		struct PageRefElement* refElem = (struct PageRefElement*)kmalloc(sizeof(struct PageRefElement));
+		assert(fva >= 0 && fva <= USER_TOP);
 		if(refElem == NULL){
 			panic("Couldn't allocate page reference element using kmalloc in optimal");
 		}
