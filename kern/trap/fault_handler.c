@@ -198,7 +198,7 @@ void fault_handler(struct Trapframe *tf)
 		{
 			if (fault_va >= USER_TOP)
 			{
-				cprintf("User process accessing protected address space >= USER_TOP. Exiting.\n");
+				cprintf("User process accessing protected address space >= USER_TOP. Exiting. fva: %x, user_top: %x, and kernel base: %x\n", fault_va, USER_TOP, KERNEL_BASE);
 				env_exit();
 			}
 
@@ -291,7 +291,9 @@ int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct
 
 	struct WorkingSetElement* copyPTR;
 	LIST_FOREACH(copyPTR, initWorkingSet){
-        LIST_INSERT_TAIL(&currentWorkingSet, copyPTR);
+		struct WorkingSetElement* new_elem = kmalloc(sizeof(struct WorkingSetElement));
+		new_elem->virtual_address = copyPTR->virtual_address;
+        LIST_INSERT_TAIL(&currentWorkingSet, new_elem);
 	}
 	
 	uint32 counter = 0;
@@ -396,54 +398,62 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		struct WorkingSetElement* elem;
 		if(faulted_env->optimal_loaded != 1){
 			LIST_FOREACH(elem, &(faulted_env->page_WS_list)){
-				LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), elem);
+				struct WorkingSetElement* new_elem = kmalloc(sizeof(struct WorkingSetElement));
+				new_elem->virtual_address = elem->virtual_address;
+				LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_elem);
 			}
 			faulted_env->optimal_loaded = 1;
 		}
 		
 		struct FrameInfo* new_frame;
-		// cprintf("Getting frame info\n");
-		get_frame_info(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), &new_frame);
-		// cprintf("Got frame info\n");
+		uint32 fva = ROUNDDOWN(fault_va, PAGE_SIZE);
+
+		get_frame_info(faulted_env->env_page_directory, fva, &new_frame);
+
 		if(new_frame != NULL){
-			pt_set_page_permissions(faulted_env->env_page_directory, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_WRITEABLE | PERM_USER, 0);
-			// cprintf("the frame is existing alrady, setting it's present to 1\n");
+			pt_set_page_permissions(faulted_env->env_page_directory, fva, PERM_PRESENT | PERM_WRITEABLE | PERM_USER, 0);
 		} else{
-			// cprintf("the frame doens't exist and allocating frame is in progress\n");
 			allocate_frame(&new_frame);
-			map_frame(faulted_env->env_page_directory, new_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
+			map_frame(faulted_env->env_page_directory, new_frame, fva, PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
 			
-			// cprintf("allocated the frame and mapped, now reading it from the env page\n");
-			int read_page = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
+			int read_page = pf_read_env_page(faulted_env, fva);
 			if (read_page == E_PAGE_NOT_EXIST_IN_PF)
 			{
-				if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
+				if (!((fva >= USER_HEAP_START && fva < USER_HEAP_MAX) || (fva >= USTACKBOTTOM && fva < USTACKTOP)))
 				{
-					cprintf("Exitting the env");
 					env_exit();
 				}
 			} 
 		}
 		
 		if(LIST_SIZE(&(faulted_env->ActiveOptimalList)) == faulted_env->page_WS_max_size){
-			// cprintf("Entered Removal Area\n");
 			LIST_FOREACH(elem, &(faulted_env->ActiveOptimalList)){
 				pt_set_page_permissions(faulted_env->env_page_directory, elem->virtual_address, 0, PERM_PRESENT);
 				LIST_REMOVE(&(faulted_env->ActiveOptimalList), elem);
-				// cprintf("Removed Element: %x\n", elem->virtual_address);
 				kfree(elem);
 			}
+
 		} 
 		
-		struct WorkingSetElement* new_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
-		// cprintf("Inserting new element into the active optimal list: %x\n", new_element->virtual_address);
-		LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_element);
+		struct WorkingSetElement* ins_elem;
+		uint32* foundInActiveList = 0;
+		LIST_FOREACH(ins_elem, &(faulted_env->ActiveOptimalList)){
+			if(ins_elem->virtual_address == fva){
+				foundInActiveList = 1;
+				break;
+			};
+		}	
+		struct WorkingSetElement* new_element;
+		if(!foundInActiveList){
+			new_element = env_page_ws_list_create_element(faulted_env, fva);
+			LIST_INSERT_TAIL(&(faulted_env->ActiveOptimalList), new_element);
+		}
 		
-		// cprintf("Allocating new element using kmalloc\n");
 		struct PageRefElement* refElem = kmalloc(sizeof(struct PageRefElement));
-		if (!refElem) panic("kmalloc failed");
-		memset(refElem, 0, sizeof(struct PageRefElement));
-		refElem->virtual_address = ROUNDDOWN(new_element->virtual_address, PAGE_SIZE);
+		if(refElem == NULL){
+			panic("Couldn't allocate page reference element using kmalloc in optimal");
+		}
+		refElem->virtual_address = fva;
 		LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), refElem);
 	} else{
 
