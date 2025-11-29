@@ -58,6 +58,8 @@
     "stdint.h": "c",
     "pagefile_manager.h": "c",
     "lib.h": "c",
-    "uheap.h": "c"
+    "uheap.h": "c",
+    "compare": "c",
+    "type_traits": "c"
   }
 }

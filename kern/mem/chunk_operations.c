@@ -146,6 +146,7 @@ void *sys_sbrk(int numOfPages)
 //=====================================
 void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 {
+	cprintf("\n\n\n\nallocate_user_mem called with size %d\n", size);
 	/*====================================*/
 	/*Remove this line before start coding*/
 	//		inctst();
@@ -154,12 +155,11 @@ void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #2 allocate_user_mem
 	// Your code is here
-	cprintf("\n\n\n\nallocate_user_mem called with size %d\n", size);
 	virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	uint32 *page_table = NULL;
 
-	for (uint32 va = virtual_address; required_pages; required_pages--, va += PAGE_SIZE)
+	for (uint32 va = virtual_address; required_pages > 0; required_pages--, va += PAGE_SIZE)
 	{
 		int ret = get_page_table(e->env_page_directory, va, &page_table);
 
@@ -180,6 +180,7 @@ void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 //=====================================
 void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 {
+	cprintf("\n\n\n\nfree_user_mem called with size %d\n", size);
 	/*====================================*/
 	/*Remove this line before start coding*/
 	//		inctst();
@@ -193,7 +194,7 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 
 	uint32 *page_table = NULL;
 
-	for (uint32 va = virtual_address; page_count; page_count--, va += PAGE_SIZE)
+	for (uint32 va = virtual_address; page_count > 0; page_count--, va += PAGE_SIZE)
 	{
 
 		int ret_page_table = get_page_table(e->env_page_directory, va, &page_table);
@@ -215,24 +216,49 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 			continue;
 		}
 		// Remove from working set
+		// struct WorkingSetElement *ws_element = NULL;
+		// LIST_FOREACH(ws_element, &(e->page_WS_list))
+		// {
+		// 	if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
+		// 	{
+		// 		// ! Begin critical Section
+		// 		if (e->page_last_WS_element == ws_element)
+		// 		{
+		// 			e->page_last_WS_element = LIST_NEXT(ws_element);
+		// 			// Wrap around
+		// 			if (e->page_last_WS_element == NULL)
+		// 			{
+		// 				e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
+		// 			}
+		// 			// CRITICAL: If it still points to the element we are removing,
+		// 			// it means it was the only element in the list. Set to NULL.
+		// 			if (e->page_last_WS_element == ws_element)
+		// 			{
+		// 				e->page_last_WS_element = NULL;
+		// 			}
+		// 		}
+		// 		//! End Section
+		// 		LIST_REMOVE(&(e->page_WS_list), ws_element);
+		// 		kfree(ws_element);
+		// 		break;
+		// 	}
+		// }
+
 		struct WorkingSetElement *ws_element = NULL;
-		LIST_FOREACH(ws_element, &(e->page_WS_list))
+		LIST_FOREACH_SAFE(ws_element, &(e->page_WS_list), prev_next_info)
 		{
 			if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
 			{
-				//! Section Is Under Test
-
+				// Update page_last_WS_element if it points to the element being removed
 				if (e->page_last_WS_element == ws_element)
 				{
 					e->page_last_WS_element = LIST_NEXT(ws_element);
-					// If we removed the last element in the list, wrap around to the head
 					if (e->page_last_WS_element == NULL)
 					{
 						e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
 					}
 				}
 
-				//! End Section
 				LIST_REMOVE(&(e->page_WS_list), ws_element);
 				kfree(ws_element);
 				break;
@@ -240,13 +266,13 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 		}
 
 		unmap_frame(e->env_page_directory, va);
-
-		// kfree((void *)va);
 	}
 
-	// Comment the following line
-	// panic("free_user_mem() is not implemented yet...!!");
+	// kfree((void *)va);
 }
+
+// Comment the following line
+// panic("free_user_mem() is not implemented yet...!!");
 
 //=====================================
 // 4) FREE USER MEMORY (BUFFERING):
