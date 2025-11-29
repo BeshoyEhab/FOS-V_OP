@@ -689,34 +689,27 @@ int get_load_average()
 /********* for Priority RR Scheduler *************/
 void env_set_priority(int envID, int priority)
 {
-	struct Env *pcb;
-	int i = envid2env(envID,&pcb,0);
-	if (i<0){
-	return;}
-if(priority <0)
-priority =0;
-if(priority >= num_of_ready_queues){
+	
+	//Get the process of the given ID
+	struct Env* proc ;
+	envid2env(envID, &proc, 0);
+	
+	acquire_kspinlock(&ProcessQueues.qlock);
 
-	priority = num_of_ready_queues-1;
-}
-acquire_kspinlock(&ProcessQueues.qlock);
-
-if(pcb->env_status == ENV_READY){
-	sched_remove_ready(pcb);
-	pcb->priority = priority;
-	sched_insert_ready(pcb);
-
-}
-else
-    {
-        pcb->priority = priority;
-    }
-
+	if(proc->env_status==ENV_READY){
+		if(proc->priority != priority){
+			sched_remove_ready(proc);
+			proc->priority=priority;
+			sched_insert_ready(proc);
+		}
+	}else {
+		proc->priority=priority;
+	}
 release_kspinlock(&ProcessQueues.qlock);
 }
 void sched_set_starv_thresh(uint32 starvThresh)
 {
-acquire_kspinlock(&ProcessQueues.qlock);
-starvation_threshold = starvThresh;
-release_kspinlock(&ProcessQueues.qlock);
+	acquire_kspinlock(&ProcessQueues.qlock);
+	starvation_threshold =starvThresh;
+	release_kspinlock(&ProcessQueues.qlock);
 }
