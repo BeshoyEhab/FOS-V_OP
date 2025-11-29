@@ -198,6 +198,8 @@ void *custom_fit(uint32 size)
 //=================================
 void *malloc(uint32 size)
 {
+	cprintf("\n\n\n\nmalloc called with size %d\n", size);
+
 	//==============================================================
 	// DON'T CHANGE THIS CODE========================================
 	uheap_init();
@@ -220,9 +222,9 @@ void *malloc(uint32 size)
 	// panic("malloc() is not implemented yet...!!");
 }
 
-//=================================
-// [2] FREE SPACE FROM USER HEAP:
-//=================================
+//====================================================
+//====================================================
+//=====================================================
 
 struct uheapPageSegment *find_page_segment(uint32 va)
 {
@@ -238,58 +240,66 @@ struct uheapPageSegment *find_page_segment(uint32 va)
 	return seg_iter;
 }
 
+void free_segment_struct(struct uheapPageSegment *seg)
+{
+	int i = seg - usegment_pool;
+	if (i >= 0 && i < MAX_SEGMENTS)
+	{
+		usegment_pool_used[i] = 0;
+		seg->pageCount = 0;
+	}
+}
+
 void merge_free_segments(struct uheapPageSegment *segment)
 {
-	struct uheapPageSegment *seg1 = NULL, *seg2 = NULL;
-	bool merge_down = 0;
-
-	// Check if we can merge with previous segment
-	if (segment->startPage_va > USER_HEAP_START)
-	{
-		LIST_FOREACH(seg1, &free_Upages_segments)
-		{
-			if (seg1->startPage_va + (seg1->pageCount * PAGE_SIZE) == segment->startPage_va)
-			{
-				seg2 = seg1;
-				merge_down = 1;
-				seg1->pageCount += segment->pageCount;
-				break;
-			}
-		}
-	}
-
-	// Check if we can merge with next segment
-	seg1 = NULL;
-	if (!merge_down)
-	{
-		LIST_FOREACH(seg1, &free_Upages_segments)
-		{
-			if (seg1->startPage_va == (segment->startPage_va + (segment->pageCount * PAGE_SIZE)))
-			{
-				seg1->startPage_va = segment->startPage_va;
-				seg1->pageCount += segment->pageCount;
-				return;
-			}
-		}
-	}
-	else
-	{
-		LIST_FOREACH(seg1, &free_Upages_segments)
-		{
-			if (seg1->startPage_va == (seg2->startPage_va + (seg2->pageCount * PAGE_SIZE)))
-			{
-				seg1->startPage_va = seg2->startPage_va;
-				seg1->pageCount += seg2->pageCount;
-				LIST_REMOVE(&free_Upages_segments, seg2);
-				return;
-			}
-		}
-	}
-
-	if (merge_down)
+	if (segment == NULL)
 		return;
 
-	LIST_INSERT_HEAD(&free_Upages_segments, segment);
+	struct uheapPageSegment *prev_seg = NULL;
+	struct uheapPageSegment *next_seg = NULL;
+	bool found_prev = 0;
+	bool found_next = 0;
+
+	// Find adjacent segments
+	struct uheapPageSegment *seg = NULL;
+	LIST_FOREACH(seg, &free_Upages_segments)
+	{
+		// Check if seg is immediately before segment
+		if (seg->startPage_va + (seg->pageCount * PAGE_SIZE) == segment->startPage_va)
+		{
+			prev_seg = seg;
+			found_prev = 1;
+		}
+		// Check if seg is immediately after segment
+		if (segment->startPage_va + (segment->pageCount * PAGE_SIZE) == seg->startPage_va)
+		{
+			next_seg = seg;
+			found_next = 1;
+		}
+	}
+
+	// Merge with previous
+	if (found_prev)
+	{
+		prev_seg->pageCount += segment->pageCount;
+		free_segment_struct(segment);
+		segment = prev_seg; // Continue with merged segment
+	}
+
+	// Merge with next
+	if (found_next)
+	{
+		segment->pageCount += next_seg->pageCount;
+		LIST_REMOVE(&free_Upages_segments, next_seg);
+		free_segment_struct(next_seg);
+		return; // Already in list
+	}
+
+	// If we didn't merge with previous, add to list
+	if (!found_prev)
+	{
+		LIST_INSERT_HEAD(&free_Upages_segments, segment);
+	}
 }
 
 int update_break_after_free(void)
@@ -308,8 +318,12 @@ int update_break_after_free(void)
 }
 
 //=================================
+// [2] FREE SPACE FROM USER HEAP:
+//=================================
 void free(void *virtual_address)
 {
+	cprintf("\n\n\n\nfree called with virtual_address %p\n", virtual_address);
+
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #3 free
 	// Your code is here
 	uint32 virtual_address_uint = (uint32)virtual_address;
@@ -325,9 +339,8 @@ void free(void *virtual_address)
 	}
 	else if (virtual_address_uint >= uheapPageAllocStart && virtual_address_uint < USER_HEAP_MAX)
 	{
-		virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
-
-		struct uheapPageSegment *segment = find_page_segment((uint32)virtual_address);
+		uint32 va_aligned = ROUNDDOWN(virtual_address_uint, PAGE_SIZE);
+		struct uheapPageSegment *segment = find_page_segment(va_aligned);
 		if (segment == NULL)
 		{
 			panic("free: segment not found for the given virtual address");
