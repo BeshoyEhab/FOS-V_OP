@@ -149,12 +149,13 @@ void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 	// cprintf("\n\n\n\nallocate_user_mem called with size %d\n", size);
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #2 allocate_user_mem
 	// Your code is here
-	virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
+	// virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	uint32 *page_table = NULL;
 
-	for (uint32 va = virtual_address; required_pages > 0; required_pages--, va += PAGE_SIZE)
+	for (uint32 va = virtual_address; required_pages; required_pages--, va += PAGE_SIZE)
 	{
+		// cprintf("$: ");
 		int ret = get_page_table(e->env_page_directory, va, &page_table);
 
 		if (ret == TABLE_NOT_EXIST)
@@ -174,62 +175,35 @@ void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 //=====================================
 void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 {
-	// cprintf("\n\n\n\nfree_user_mem called with size %d\n", size);
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #4 free_user_mem
 	// Your code is here
 	// Calculate number of pages
 	int page_count = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	uint32 *page_table = NULL;
 	// Iterate through all pages in the range
-	for (uint32 va = virtual_address; page_count > 0; page_count--, va += PAGE_SIZE)
+	for (uint32 va = virtual_address; page_count; page_count--, va += PAGE_SIZE)
 	{
-		// 1. Check if page table exists
+		// Check if page table exists
 		int ret_page_table = get_page_table(e->env_page_directory, va, &page_table);
 		if (ret_page_table == TABLE_NOT_EXIST)
 		{
 			continue;
 		}
-		// 2. Unmark the page (logic: allow future allocation)
+		// Unmark the page (logic: allow future allocation)
 		pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
-		// 3. Remove from Page File
+		// Remove from Page File
 		pf_remove_env_page(e, va);
-		// 4. Check if page is currently in RAM
+		// Check if page is currently in RAM
 		struct FrameInfo *frame = get_frame_info(e->env_page_directory, va, &page_table);
 		if (!frame)
 		{
 			continue; // Not in RAM, done with this page
 		}
-		//	5. Remove from Working Set (RAM)
 		struct WorkingSetElement *ws_element = NULL;
 		LIST_FOREACH(ws_element, &(e->page_WS_list))
 		{
-			// if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
-			// {
-			// 	// --- CRITICAL FIX: Update Clock Hand ---
-			// 	if (e->page_last_WS_element == ws_element)
-			// 	{
-			// 		e->page_last_WS_element = LIST_NEXT(ws_element);
-			// 		// Wrap around if we hit the end
-			// 		if (e->page_last_WS_element == NULL)
-			// 		{
-			// 			e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
-			// 		}
-			// 		// EDGE CASE: If list had only 1 element, prev logic sets it back to self.
-			// 		// We must explicitly set it to NULL.
-			// 		if (e->page_last_WS_element == ws_element)
-			// 		{
-			// 			e->page_last_WS_element = NULL;
-			// 		}
-			// 	}
-			// 	// ---------------------------------------
-			// 	LIST_REMOVE(&(e->page_WS_list), ws_element);
-			// 	kfree(ws_element);
-			// 	break; // Found and removed, exit loop
-			// }
-
 			if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
 			{
-				// Update clock hand if it points to the element being removed
 				if (e->page_last_WS_element == ws_element)
 				{
 					e->page_last_WS_element = LIST_NEXT(ws_element);
@@ -245,12 +219,12 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 					}
 				}
 				LIST_REMOVE(&(e->page_WS_list), ws_element);
-				kfree(ws_element);
-				break; // Found and removed, exit loop
+
+				kfree((void *)ws_element);
+				break;
 			}
 		}
-		// 6. Unmap the frame (Hardware)
-		// [FIX]: This must be OUTSIDE the LIST_FOREACH loop
+
 		unmap_frame(e->env_page_directory, va);
 	}
 	// Comment the following line

@@ -11,7 +11,7 @@
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
 #define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE) // page table entries of the kernel
-#define MAX_SEGMENTS 1048576									//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
+#define MAX_SEGMENTS 768										// 1048576									//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
 
 int allocate_page_to_frame(uint32 va, uint32 perm);
 void *custom_fit(uint32 required_pages);
@@ -374,7 +374,7 @@ void kfree(void *virtual_address)
 
 	if (va == 0 || va < KERNEL_HEAP_START || va >= KERNEL_HEAP_MAX)
 	{
-		panic("kfree: invalid virtual address");
+		panic("kfree: invalid virtual address\nis va == 0? %s", (va == 0) ? "true" : "false");
 		return;
 	}
 
