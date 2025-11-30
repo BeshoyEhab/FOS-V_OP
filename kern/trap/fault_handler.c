@@ -196,10 +196,12 @@ void fault_handler(struct Trapframe *tf)
 	{
 		if (userTrap)
 		{
-			if (fault_va >= USER_TOP && fault_va < USER_LIMIT && (tf->tf_err & FEC_WR))
-			{
-				env_exit();
-			}
+			if (fault_va >= USER_TOP) { 
+        if (fault_va >= USER_LIMIT || (fault_va < USER_LIMIT && (tf->tf_err & FEC_WR)))
+			  {
+				  env_exit();
+			  }
+      }
 
 			int perm = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
 
