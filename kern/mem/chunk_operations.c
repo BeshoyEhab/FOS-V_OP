@@ -172,8 +172,6 @@ void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 //=====================================
 // 2) FREE USER MEMORY:
 //=====================================
-
-//!!!!!!!!!!!!!!!!!!!!!
 void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 {
 	// cprintf("\n\n\n\nfree_user_mem called with size %d\n", size);
@@ -201,13 +199,37 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 		{
 			continue; // Not in RAM, done with this page
 		}
-		// 5. Remove from Working Set (RAM)
+		//	5. Remove from Working Set (RAM)
 		struct WorkingSetElement *ws_element = NULL;
 		LIST_FOREACH(ws_element, &(e->page_WS_list))
 		{
+			// if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
+			// {
+			// 	// --- CRITICAL FIX: Update Clock Hand ---
+			// 	if (e->page_last_WS_element == ws_element)
+			// 	{
+			// 		e->page_last_WS_element = LIST_NEXT(ws_element);
+			// 		// Wrap around if we hit the end
+			// 		if (e->page_last_WS_element == NULL)
+			// 		{
+			// 			e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
+			// 		}
+			// 		// EDGE CASE: If list had only 1 element, prev logic sets it back to self.
+			// 		// We must explicitly set it to NULL.
+			// 		if (e->page_last_WS_element == ws_element)
+			// 		{
+			// 			e->page_last_WS_element = NULL;
+			// 		}
+			// 	}
+			// 	// ---------------------------------------
+			// 	LIST_REMOVE(&(e->page_WS_list), ws_element);
+			// 	kfree(ws_element);
+			// 	break; // Found and removed, exit loop
+			// }
+
 			if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
 			{
-				// --- CRITICAL FIX: Update Clock Hand ---
+				// Update clock hand if it points to the element being removed
 				if (e->page_last_WS_element == ws_element)
 				{
 					e->page_last_WS_element = LIST_NEXT(ws_element);
@@ -216,14 +238,12 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 					{
 						e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
 					}
-					// EDGE CASE: If list had only 1 element, prev logic sets it back to self.
-					// We must explicitly set it to NULL.
+					// Handle single element case
 					if (e->page_last_WS_element == ws_element)
 					{
 						e->page_last_WS_element = NULL;
 					}
 				}
-				// ---------------------------------------
 				LIST_REMOVE(&(e->page_WS_list), ws_element);
 				kfree(ws_element);
 				break; // Found and removed, exit loop
@@ -236,171 +256,6 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 	// Comment the following line
 	// panic("free_user_mem() is not implemented yet...!!");
 }
-//!!!!!!!!!!!!!!!!!!!!!
-
-//*
-// void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
-// {
-// 	// Calculate number of pages to free
-// 	int page_count = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
-// 	uint32 *cur_page_table = NULL;
-// 	// Iterate page by page
-// 	// for (uint32 cur_va = virtual_address; page_count > 0; page_count--, cur_va += PAGE_SIZE)
-// 	// {
-// 	// 	// 1. Get Page Table (Check if exists)
-// 	// 	int ret = get_page_table(e->env_page_directory, cur_va, &cur_page_table);
-// 	// 	if (ret == TABLE_NOT_EXIST)
-// 	// 	{
-// 	// 		continue;
-// 	// 	}
-// 	// 	// 2. Unmark pages (Use the correct flag PERM_UHPAGE)
-// 	// 	// We set '0' to clear permissions, passing PERM_UHPAGE to indicate what to clear
-// 	// 	pt_set_page_permissions(e->env_page_directory, cur_va, 0, PERM_UHPAGE);
-// 	// 	// 3. Free pages from page file
-// 	// 	pf_remove_env_page(e, cur_va);
-// 	// 	// 4. Check if page is in RAM (Working Set)
-// 	// 	// We get the frame to see if it is physically present
-// 	// 	struct FrameInfo *frame = get_frame_info(e->env_page_directory, cur_va, &cur_page_table);
-// 	// 	if (frame) // If frame != NULL, the page is in RAM
-// 	// 	{
-// 	// 		// Assuming you have implemented the O(1) Bonus by adding 'wse' to FrameInfo:
-// 	// 		// If not, you must search the list manually (O(N)).
-// 	// 		// Let's assume O(N) loop here for safety if O(1) isn't ready,
-// 	// 		// OR use frame->wse if you did the bonus.
-// 	// 		struct WorkingSetElement *wse = NULL;
-// 	// 		// --- SEARCHING FOR ELEMENT (Safe O(N) fallback) ---
-// 	// 		LIST_FOREACH(wse, &(e->page_WS_list))
-// 	// 		{
-// 	// 			if (ROUNDDOWN(wse->virtual_address, PAGE_SIZE) == ROUNDDOWN(cur_va, PAGE_SIZE))
-// 	// 			{
-// 	// 				// === CRITICAL FIX: Update Clock Hand ===
-// 	// 				if (e->page_last_WS_element == wse)
-// 	// 				{
-// 	// 					e->page_last_WS_element = LIST_NEXT(wse);
-// 	// 					// Wrap around
-// 	// 					if (e->page_last_WS_element == NULL)
-// 	// 					{
-// 	// 						e->page_last_WS_element = LIST_FIRST(&(e->page_WS_list));
-// 	// 					}
-// 	// 					// If list became empty
-// 	// 					if (e->page_last_WS_element == wse)
-// 	// 					{
-// 	// 						e->page_last_WS_element = NULL;
-// 	// 					}
-// 	// 				}
-// 	// 				// =======================================
-// 	// 				LIST_REMOVE(&(e->page_WS_list), wse);
-// 	// 				cprintf("LIST_REMOVE called in free_user_mem to free wse %p\n", wse);
-// 	// 				kfree(wse);
-// 	// 				break; // Found and removed
-// 	// 			}
-// 	// 		}
-// 	// 	}
-// 	// 	// 5. Unmap the frame (Hardware)
-// 	// 	// Must be done AFTER dealing with the Working Set
-// 	// 	unmap_frame(e->env_page_directory, cur_va);
-// 	// }
-// 	// ---------- REPLACE the core loop inside free_user_mem(...) with this ----------
-// 	for (uint32 va = virtual_address; page_count > 0; page_count--, va += PAGE_SIZE)
-// 	{
-// 		uint32 *page_table = NULL;
-// 		// Try to get page table (may not exist)
-// 		int ret_page_table = get_page_table(e->env_page_directory, va, &page_table);
-// 		// Don't skip: even if TABLE_NOT_EXIST, the page might be in RAM / WS
-// 		// So we handle permissions clearing if table exists, but still check frame/WS.
-// 		if (ret_page_table != TABLE_NOT_EXIST)
-// 		{
-// 			// Unmark the page (allow future allocation): clear UHPAGE flag
-// 			pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
-// 			// Remove from Page File (Disk)
-// 			pf_remove_env_page(e, va);
-// 		}
-// 		// See if page is in RAM (frame)
-// 		struct FrameInfo *frame = get_frame_info(e->env_page_directory, va, &page_table);
-// 		if (!frame)
-// 		{
-// 			// nothing in RAM; continue
-// 			continue;
-// 		}
-// 		// Remove from Working Set (RAM) safely:
-// 		struct WorkingSetElement *ws_element = LIST_FIRST(&(e->page_WS_list));
-// 		struct WorkingSetElement *next_ws = NULL;
-// 		while (ws_element != NULL)
-// 		{
-// 			next_ws = LIST_NEXT(ws_element);
-// 			if (ROUNDDOWN(ws_element->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
-// 			{
-// 				// Update page_last_WS_element safely
-// 				if (e->page_last_WS_element == ws_element)
-// 				{
-// 					// pick successor; if none, pick first; if list will be empty, set NULL after removal
-// 					struct WorkingSetElement *candidate = LIST_NEXT(ws_element);
-// 					if (candidate == NULL)
-// 						candidate = LIST_FIRST(&(e->page_WS_list));
-// 					if (candidate == ws_element) // only one element case
-// 						e->page_last_WS_element = NULL;
-// 					else
-// 						e->page_last_WS_element = candidate;
-// 				}
-// 				LIST_REMOVE(&(e->page_WS_list), ws_element);
-// 				kfree(ws_element);
-// 				break; // found and removed for this VA
-// 			}
-// 			ws_element = next_ws;
-// 		}
-// 		// Finally unmap frame (Hardware)
-// 		unmap_frame(e->env_page_directory, va);
-// 	}
-// }
-
-//*
-
-// void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
-// {
-// 	int pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
-// 	uint32 va = virtual_address;
-// 	uint32 *pt = NULL;
-
-// 	while (pages--)
-// 	{
-
-// 		int exists = get_page_table(e->env_page_directory, va, &pt);
-// 		if (exists != TABLE_NOT_EXIST)
-// 		{
-// 			pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
-// 			pf_remove_env_page(e, va);
-
-// 			struct FrameInfo *frame = get_frame_info(e->env_page_directory, va, &pt);
-
-// 			// SAFE WS ITERATION
-// 			struct WorkingSetElement *ws = LIST_FIRST(&e->page_WS_list);
-// 			while (ws)
-// 			{
-// 				struct WorkingSetElement *next = LIST_NEXT(ws);
-// 				if (ROUNDDOWN(ws->virtual_address, PAGE_SIZE) == ROUNDDOWN(va, PAGE_SIZE))
-// 				{
-// 					if (e->page_last_WS_element == ws)
-// 					{
-// 						e->page_last_WS_element = next;
-// 						if (!e->page_last_WS_element)
-// 							e->page_last_WS_element = LIST_FIRST(&e->page_WS_list);
-// 					}
-// 					LIST_REMOVE(&e->page_WS_list, ws);
-// 					kfree(ws);
-// 					break;
-// 				}
-// 				ws = next;
-// 			}
-
-// 			if (frame)
-// 				unmap_frame(e->env_page_directory, va);
-// 		}
-
-// 		va += PAGE_SIZE;
-// 	}
-// }
-
-//*
 
 //=====================================
 // 4) FREE USER MEMORY (BUFFERING):

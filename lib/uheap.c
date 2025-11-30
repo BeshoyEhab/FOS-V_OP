@@ -6,7 +6,7 @@
 struct free_Upages_segments free_Upages_segments;
 struct allocated_Upages_segments allocated_Upages_segments;
 
-#define MAX_SEGMENTS 576
+#define MAX_SEGMENTS 768
 //*
 uint32 custom_fit(uint32 required_pages);
 int split_segment(struct uheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
@@ -130,6 +130,9 @@ uint32 custom_fit(uint32 size)
 
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 
+	cprintf("custom_fit called with size: %d, required_pages: %d\n",
+			size, required_pages);
+
 	// means that no free segments and no enough space to break
 	if (LIST_EMPTY(&free_Upages_segments) && uheapPageAllocBreak + required_pages * PAGE_SIZE > USER_HEAP_MAX)
 	{
@@ -181,10 +184,10 @@ uint32 custom_fit(uint32 size)
 		uint32 new_break = uheapPageAllocBreak + required_pages * PAGE_SIZE;
 
 		// Check for break overflow
-		// if (new_break < uheapPageAllocBreak || new_break > USER_HEAP_MAX)
-		// {
-		// 	return NULL;
-		// }
+		if (new_break < uheapPageAllocBreak || new_break > USER_HEAP_MAX)
+		{
+			return NULL;
+		}
 
 		struct uheapPageSegment *newseg = allocate_segment_struct();
 		if (newseg == NULL)
@@ -249,115 +252,22 @@ struct uheapPageSegment *find_page_segment(uint32 va)
 
 	LIST_FOREACH(seg, &allocated_Upages_segments)
 	{
-		if (seg->startPage_va == va)
+		uint32 seg_start = seg->startPage_va;
+		uint32 seg_end = seg_start + (seg->pageCount * PAGE_SIZE);
+
+		if (va >= seg_start && va < seg_end)
 			return seg;
 	}
+	// LIST_FOREACH(seg, &allocated_Upages_segments)
+	// {
+	// 	if (seg->startPage_va == aligned_va)
+	// 		return seg;
+	// }
 	return NULL;
 }
 
-// void merge_free_segments(struct uheapPageSegment *segment)
-// {
-// 	if (segment == NULL)
-// 		return;
-// 	struct uheapPageSegment *prev_seg = NULL;
-// 	struct uheapPageSegment *next_seg = NULL;
-// 	bool found_prev = 0;
-// 	bool found_next = 0;
-// 	// Find adjacent segments
-// 	struct uheapPageSegment *seg = NULL;
-// 	LIST_FOREACH(seg, &free_Upages_segments)
-// 	{
-// 		// Check if seg is immediately before segment
-// 		if (seg->startPage_va + (seg->pageCount * PAGE_SIZE) == segment->startPage_va)
-// 		{
-// 			prev_seg = seg;
-// 			found_prev = 1;
-// 		}
-// 		// Check if seg is immediately after segment
-// 		if (segment->startPage_va + (segment->pageCount * PAGE_SIZE) == seg->startPage_va)
-// 		{
-// 			next_seg = seg;
-// 			found_next = 1;
-// 		}
-// 	}
-// 	// Merge with previous
-// 	if (found_prev)
-// 	{
-// 		prev_seg->pageCount += segment->pageCount;
-// 		free_segment_struct(segment);
-// 		segment = prev_seg; // Continue with merged segment
-// 	}
-// 	// Merge with next
-// 	if (found_next)
-// 	{
-// 		segment->pageCount += next_seg->pageCount;
-// 		LIST_REMOVE(&free_Upages_segments, next_seg);
-// 		free_segment_struct(next_seg);
-// 		return; // Already in list
-// 	}
-// 	// If we didn't merge with previous, add to list
-// 	if (!found_prev)
-// 	{
-// 		LIST_INSERT_HEAD(&free_Upages_segments, segment);
-// 	}
-// }
-
-// // int update_break_after_free(void)
-// // {
-// // 	struct uheapPageSegment *seg;
-// // 	LIST_FOREACH(seg, &free_Upages_segments)
-// // 	{
-// // 		uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
-// // 		if (seg_end == uheapPageAllocBreak)
-// // 		{
-// // 			uheapPageAllocBreak = seg->startPage_va;
-// // 			return 0;
-// // 		}
-// // 	}
-// // 	return 1;
-// // }
-// //*
-
-// // int update_break_after_free(void)
-// // {
-// // 	int changed = 1;
-// // 	while (changed)
-// // 	{
-// // 		changed = 0;
-// // 		struct uheapPageSegment *seg;
-// // 		LIST_FOREACH(seg, &free_Upages_segments)
-// // 		{
-// // 			uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
-// // 			if (seg_end == uheapPageAllocBreak)
-// // 			{
-// // 				// move break down
-// // 				uheapPageAllocBreak = seg->startPage_va;
-// // 				changed = 1;
-// // 				// After changing break, try again from start (outer while will loop)
-// // 				break;
-// // 			}
-// // 		}
-// // 	}
-// // 	return 0;
-// // }
-
-// int update_break_after_free(struct uheapPageSegment *segment)
-// {
-// 	struct uheapPageSegment *seg;
-// 	uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
-// 	if (seg_end == uheapPageAllocBreak)
-// 	{
-// 		uheapPageAllocBreak = seg->startPage_va;
-// 		return 0;
-// 	}
-// 	return 1;
-// }
-
-//*
-
 void merge_free_segments(struct uheapPageSegment *segment)
 {
-
 	if (segment == NULL)
 		return;
 
@@ -366,17 +276,15 @@ void merge_free_segments(struct uheapPageSegment *segment)
 	int found_prev = 0;
 	int found_next = 0;
 
-	// Find adjacent segments in free list
+	// Find adjacent segments
 	struct uheapPageSegment *seg = NULL;
 	LIST_FOREACH(seg, &free_Upages_segments)
 	{
-		// Check if seg is immediately before segment
 		if (seg->startPage_va + (seg->pageCount * PAGE_SIZE) == segment->startPage_va)
 		{
 			prev_seg = seg;
 			found_prev = 1;
 		}
-		// Check if seg is immediately after segment
 		if (segment->startPage_va + (segment->pageCount * PAGE_SIZE) == seg->startPage_va)
 		{
 			next_seg = seg;
@@ -384,54 +292,89 @@ void merge_free_segments(struct uheapPageSegment *segment)
 		}
 	}
 
+	// Merge all three: prev + segment + next
 	if (found_prev && found_next)
 	{
-		// Merge with both previous and next
-		prev_seg->pageCount = prev_seg->pageCount + segment->pageCount + next_seg->pageCount;
+		prev_seg->pageCount += segment->pageCount + next_seg->pageCount;
 		LIST_REMOVE(&free_Upages_segments, next_seg);
+		free_segment_struct(next_seg); // ✅ Free next
+		free_segment_struct(segment);  // ✅ Free segment
+		return;
 	}
 
-	// Merge with previous
-	else if (found_prev)
+	// Merge with previous only
+	if (found_prev)
 	{
-		prev_seg->pageCount = prev_seg->pageCount + segment->pageCount;
-		// free_segment_struct(segment);
-		// segment = prev_seg;
+		prev_seg->pageCount += segment->pageCount;
+		free_segment_struct(segment); // ✅ Free segment
+		return;
 	}
 
-	// Merge with next
-	else if (found_next)
+	// Merge with next only
+	if (found_next)
 	{
 		next_seg->startPage_va = segment->startPage_va;
-		next_seg->pageCount = next_seg->pageCount + segment->pageCount;
-		// segment->pageCount += next_seg->pageCount;
-		// LIST_REMOVE(&free_Upages_segments, next_seg);
-		// free_segment_struct(next_seg);
-		// return;
+		next_seg->pageCount += segment->pageCount;
+		free_segment_struct(segment); // ✅ Free segment
+		return;
 	}
 
-	// If we didn't merge with previous
-	if (!found_prev)
-	{
-		LIST_INSERT_TAIL(&free_Upages_segments, segment);
-	}
+	// No merge - add to free list
+	LIST_INSERT_TAIL(&free_Upages_segments, segment);
 }
+
+// int update_break_after_free(void)
+// {
+// 	struct uheapPageSegment *seg;
+// 	LIST_FOREACH(seg, &free_Upages_segments)
+// 	{
+// 		uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
+// 		if (seg_end == uheapPageAllocBreak)
+// 		{
+// 			uheapPageAllocBreak = seg->startPage_va;
+// 			LIST_REMOVE(&free_Upages_segments, seg);
+// 			free_segment_struct(seg); // ✅ Free it
+// 			return 0;
+// 		}
+// 	}
+// 	return 1;
+// }
 
 int update_break_after_free(void)
 {
 	struct uheapPageSegment *seg;
-	LIST_FOREACH(seg, &free_Upages_segments)
+	uint32 max_used = uheapPageAllocStart;
+
+	// Find the maximum used address from allocated segments
+	LIST_FOREACH(seg, &allocated_Upages_segments)
 	{
-		uint32 seg_end = seg->startPage_va + seg->pageCount * PAGE_SIZE;
-		if (seg_end >= uheapPageAllocBreak)
+		uint32 seg_end = seg->startPage_va + (seg->pageCount * PAGE_SIZE);
+		if (seg_end > max_used)
 		{
-			uheapPageAllocBreak = seg->startPage_va;
-			LIST_REMOVE(&free_Upages_segments, seg);
-			// free_segment_struct(seg);
-			return 0;
+			max_used = seg_end;
 		}
 	}
-	return 1;
+
+	// Also check free segments that might be at the end
+	LIST_FOREACH(seg, &free_Upages_segments)
+	{
+		uint32 seg_end = seg->startPage_va + (seg->pageCount * PAGE_SIZE);
+		if (seg_end > max_used)
+		{
+			max_used = seg_end;
+		}
+	}
+
+	// Update break to the maximum used address
+	if (max_used > uheapPageAllocStart)
+	{
+		uheapPageAllocBreak = max_used;
+		return 0;
+	}
+
+	// If no segments, reset to start
+	uheapPageAllocBreak = uheapPageAllocStart;
+	return 0;
 }
 
 //=================================
@@ -443,7 +386,7 @@ void free(void *virtual_address)
 	// cprintf("\n\n\n\nfree called with virtual_address %p\n", virtual_address);
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #3 free
 	// Your code is here
-	uint32 va = (uint32)ROUNDDOWN(virtual_address, PAGE_SIZE);
+	uint32 va = (uint32)virtual_address;
 	if (va == 0 || va < USER_HEAP_START || va >= USER_HEAP_MAX)
 	{
 		panic("free: invalid virtual address");
@@ -456,7 +399,6 @@ void free(void *virtual_address)
 	}
 	else if (va >= uheapPageAllocStart && va < USER_HEAP_MAX)
 	{
-		// uint32 va_aligned = ROUNDDOWN(va, PAGE_SIZE);
 		struct uheapPageSegment *segment = find_page_segment(va);
 		if (segment == NULL)
 		{
