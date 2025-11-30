@@ -136,7 +136,7 @@ void fault_handler(struct Trapframe *tf)
 		if (num_repeated_fault == 3)
 		{
 			print_trapframe(tf);
-			panic("Failed to handle fault! fault @ at va = %x from eip = %x causes va (%x) to be faulted for 3 successive times\n", before_last_fault_va, before_last_eip, fault_va);
+			panic("Failed to handle fault! fault @ va = %x from eip = %x causes va (%x) to be faulted for 3 successive times\n", before_last_fault_va, before_last_eip, fault_va);
 		}
 	}
 	else
@@ -436,16 +436,16 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		struct FrameInfo *new_frame;
 		uint32 fva = ROUNDDOWN(fault_va, PAGE_SIZE);
 
-		get_frame_info(faulted_env->env_page_directory, fva, &new_frame);
+		struct FrameInfo *fi = get_frame_info(faulted_env->env_page_directory, fva, &new_frame);
 
-		if (new_frame != NULL)
+		if (fi != NULL)
 		{
 			pt_set_page_permissions(faulted_env->env_page_directory, fva, PERM_PRESENT | PERM_WRITEABLE | PERM_USER, 0);
 		}
 		else
 		{
-			allocate_frame(&new_frame);
-			map_frame(faulted_env->env_page_directory, new_frame, fva, PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
+			allocate_frame(&fi);
+			map_frame(faulted_env->env_page_directory, fi, fva, PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
 
 			int read_page = pf_read_env_page(faulted_env, fva);
 			if (read_page == E_PAGE_NOT_EXIST_IN_PF)
@@ -462,14 +462,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			struct WorkingSetElement *free_elem = LIST_FIRST(&(faulted_env->ActiveOptimalList));
 			LIST_FOREACH_SAFE(free_elem, &(faulted_env->ActiveOptimalList), WS_List)
 			{
-				uint32 perms = pt_get_page_permissions(faulted_env->env_page_directory, free_elem->virtual_address);
-				if (perms & PERM_MODIFIED)
-				{
-					cprintf("Updating page %x in disk\n", free_elem->virtual_address);
-					struct FrameInfo *frame_info;
-					get_frame_info(faulted_env->env_page_directory, free_elem->virtual_address, &frame_info);
-					pf_update_env_page(faulted_env, free_elem->virtual_address, frame_info);
-				}
 				pt_set_page_permissions(faulted_env->env_page_directory, free_elem->virtual_address, 0, PERM_PRESENT);
 				LIST_REMOVE(&(faulted_env->ActiveOptimalList), free_elem);
 				kfree((void *)free_elem);

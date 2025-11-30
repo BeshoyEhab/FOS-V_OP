@@ -89,6 +89,7 @@ void _main(void)
 
 		int freePagesAfter = (sys_calculate_free_frames() + sys_calculate_modified_frames());
 		int expectedNumOfFrames = 7;
+		
 		if( (freePages - freePagesAfter) != expectedNumOfFrames)
 			panic("Unexpected number of allocated frames in RAM. Expected = %d, Actual = %d", expectedNumOfFrames, (freePages - freePagesAfter));
 	}
