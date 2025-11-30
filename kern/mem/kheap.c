@@ -11,7 +11,7 @@
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
 #define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE) // page table entries of the kernel
-#define MAX_SEGMENTS 1048576									//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
+#define MAX_SEGMENTS 768										// 1048576									//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
 
 int allocate_page_to_frame(uint32 va, uint32 perm);
 void *custom_fit(uint32 required_pages);
@@ -308,7 +308,7 @@ void *kmalloc(unsigned int size)
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
 	if (size == 0)
 		return NULL;
-	//cprintf("the size is greater than 0 in kmalloc\n");
+	// cprintf("the size is greater than 0 in kmalloc\n");
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
 	{
 		// we need to make lock while allocation
@@ -321,36 +321,37 @@ void *kmalloc(unsigned int size)
 
 		if (!block_lock_is_in_hold)
 			release_kspinlock(&kheap_block_lock);
-		
-		if (va != NULL){
-			//cprintf("the va is not null it will return the va from the alloc block: %x\n", va);
+
+		if (va != NULL)
+		{
+			// cprintf("the va is not null it will return the va from the alloc block: %x\n", va);
 			return va;
 		}
-		else{
-			//cprintf("the va is null it will not return the va from the alloc block\n");
+		else
+		{
+			// cprintf("the va is null it will not return the va from the alloc block\n");
 			return NULL;
 		}
-		
 	}
-	
+
 	bool is_holding_page_lock = holding_kspinlock(&kheap_page_lock);
-	
+
 	if (!is_holding_page_lock)
 	{
 		acquire_kspinlock(&kheap_page_lock);
 	}
-	
+
 	// Convert given size from bytes to pages
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	// struct kheapPagesBlock *block = NULL;
-	
+
 	// TODO: int custom_fit(uint32 required_pages); , return the status 0 sucsess , 1 fail , -1 panic
 	void *result = custom_fit(required_pages);
-	
+
 	if (!is_holding_page_lock)
-	release_kspinlock(&kheap_page_lock);
-	
-	//cprintf("the result is not null it will return the va from the custom fit\n");
+		release_kspinlock(&kheap_page_lock);
+
+	// cprintf("the result is not null it will return the va from the custom fit\n");
 	return result;
 
 	// Comment the following line
@@ -373,11 +374,11 @@ void kfree(void *virtual_address)
 
 	if (va == 0 || va < KERNEL_HEAP_START || va >= KERNEL_HEAP_MAX)
 	{
-		panic("kfree: invalid virtual address");
+		panic("kfree: invalid virtual address\nis va == 0? %s", (va == 0) ? "true" : "false");
 		return;
 	}
 
-	if (va >= KERNEL_HEAP_START && va <  KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE )
+	if (va >= KERNEL_HEAP_START && va < KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE)
 	{
 		bool block_lock_held = holding_kspinlock(&kheap_block_lock);
 		if (!block_lock_held)
@@ -433,12 +434,10 @@ void kfree(void *virtual_address)
 	{
 		panic("kfree: address not in heap space");
 	}
-
 }
 
 struct kheapPageSegment *find_page_segment(uint32 va)
 {
-	
 
 	struct kheapPageSegment *seg_iter = NULL;
 	LIST_FOREACH(seg_iter, &allocated_pages_segments)
@@ -453,67 +452,62 @@ struct kheapPageSegment *find_page_segment(uint32 va)
 
 void merge_free_segments(struct kheapPageSegment *segment)
 {
-	struct kheapPageSegment *seg1 =NULL ,*seg2 =NULL ;
-	uint32 *ptr_table=NULL;
-	bool merge_down =0;
-if(segment->startPage_va >KERNEL_HEAP_START)
-{
-	get_page_table(ptr_page_directory, segment->startPage_va - PAGE_SIZE, &ptr_table);
-	
-	if (!((ptr_table != NULL) && (ptr_table[PTX(segment->startPage_va - PAGE_SIZE)] & PERM_PRESENT)))
+	struct kheapPageSegment *seg1 = NULL, *seg2 = NULL;
+	uint32 *ptr_table = NULL;
+	bool merge_down = 0;
+	if (segment->startPage_va > KERNEL_HEAP_START)
 	{
-	LIST_FOREACH(seg1 , &free_pages_segments)
-	{
-		if(seg1->startPage_va+(seg1->pageCount*PAGE_SIZE)==segment->startPage_va)
-		{
-			seg2=seg1;
-			merge_down=1;
-			seg1->pageCount+=segment->pageCount;
-		}
+		get_page_table(ptr_page_directory, segment->startPage_va - PAGE_SIZE, &ptr_table);
 
-	}
-    }
-}
-    seg1=NULL;
-	get_page_table(ptr_page_directory, segment->startPage_va +segment->pageCount* PAGE_SIZE, &ptr_table);
-	
-	if (!((ptr_table != NULL) && (ptr_table[PTX(segment->startPage_va +segment->pageCount* PAGE_SIZE)] & PERM_PRESENT)))
-	{
-		if(!merge_down)
+		if (!((ptr_table != NULL) && (ptr_table[PTX(segment->startPage_va - PAGE_SIZE)] & PERM_PRESENT)))
 		{
-
-	LIST_FOREACH(seg1 , &free_pages_segments)
-	{
-		if(seg1->startPage_va==(segment->startPage_va + (segment->pageCount* PAGE_SIZE)) )
-		{
-			seg1->startPage_va=segment->startPage_va;
-			seg1->pageCount+=segment->pageCount;
-			return;
+			LIST_FOREACH(seg1, &free_pages_segments)
+			{
+				if (seg1->startPage_va + (seg1->pageCount * PAGE_SIZE) == segment->startPage_va)
+				{
+					seg2 = seg1;
+					merge_down = 1;
+					seg1->pageCount += segment->pageCount;
+				}
+			}
 		}
 	}
-    }
-	     
-	    else
-		{
-         LIST_FOREACH(seg1 , &free_pages_segments)
+	seg1 = NULL;
+	get_page_table(ptr_page_directory, segment->startPage_va + segment->pageCount * PAGE_SIZE, &ptr_table);
+
+	if (!((ptr_table != NULL) && (ptr_table[PTX(segment->startPage_va + segment->pageCount * PAGE_SIZE)] & PERM_PRESENT)))
 	{
-		if(seg1->startPage_va==(seg2->startPage_va + (seg2->pageCount* PAGE_SIZE)) )
+		if (!merge_down)
 		{
-			seg1->startPage_va=seg2->startPage_va;
-			seg1->pageCount+=seg2->pageCount;
-			LIST_REMOVE(&free_pages_segments,seg2);
-			return;
+
+			LIST_FOREACH(seg1, &free_pages_segments)
+			{
+				if (seg1->startPage_va == (segment->startPage_va + (segment->pageCount * PAGE_SIZE)))
+				{
+					seg1->startPage_va = segment->startPage_va;
+					seg1->pageCount += segment->pageCount;
+					return;
+				}
+			}
+		}
+
+		else
+		{
+			LIST_FOREACH(seg1, &free_pages_segments)
+			{
+				if (seg1->startPage_va == (seg2->startPage_va + (seg2->pageCount * PAGE_SIZE)))
+				{
+					seg1->startPage_va = seg2->startPage_va;
+					seg1->pageCount += seg2->pageCount;
+					LIST_REMOVE(&free_pages_segments, seg2);
+					return;
+				}
+			}
 		}
 	}
-		}
-    }
-	if(merge_down)
-	   return ;
-	LIST_INSERT_HEAD(&free_pages_segments,segment);
-
-
-
-
+	if (merge_down)
+		return;
+	LIST_INSERT_HEAD(&free_pages_segments, segment);
 }
 
 int update_break_after_free(void)

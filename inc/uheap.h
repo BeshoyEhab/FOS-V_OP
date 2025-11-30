@@ -29,6 +29,7 @@ LIST_HEAD(allocated_Upages_segments, uheapPageSegment);
 
 extern struct free_Upages_segments free_Upages_segments;
 extern struct allocated_Upages_segments allocated_Upages_segments;
+
 struct uheapPageSegment
 {
     LIST_ENTRY(uheapPageSegment)
