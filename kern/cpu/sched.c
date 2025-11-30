@@ -408,9 +408,9 @@ void update_WS_time_stamps()
 	//Your code is here
 	//Comment the following line
 	
-	int i;
+
     
-	for (i = 0; i < NENV; ++i) {
+	for (int i = 0; i < NENV; ++i) {
         struct Env *e = &envs[i];
 
         /* Skip empty / free environments */
