@@ -407,6 +407,38 @@ void update_WS_time_stamps()
 	//TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #1 update_WS_time_stamps
 	//Your code is here
 	//Comment the following line
-	panic("update_WS_time_stamps is not implemented yet...!!");
+	
+	int i;
+    
+	for (i = 0; i < NENV; ++i) {
+        struct Env *e = &envs[i];
+
+        /* Skip empty / free environments */
+        if (e->env_status == ENV_FREE)
+            continue;
+
+        /* If the env has no working-set list, skip quickly */
+        if (LIST_EMPTY(&(e->page_WS_list)))
+            continue;
+
+        struct WorkingSetElement *elem = LIST_FIRST(&(e->page_WS_list));
+        while (elem != NULL) {
+            uint32 va = elem->virtual_address;
+            int perms = pt_get_page_permissions(e->env_page_directory, va);
+            int used = (perms & PERM_USED) ? 1 : 0;
+
+            /* Age the timestamp and set MSB to current used bit */
+            elem->time_stamp = (elem->time_stamp >> 1) | ((uint32)used << 31);
+
+            /* Clear the hardware-used bit so next tick detects new accesses */
+            if (used) {
+                pt_set_page_permissions(e->env_page_directory, va, 0, PERM_USED);
+            }
+
+            elem = LIST_NEXT(elem);
+        }
+    }
+	
+	//panic("update_WS_time_stamps is not implemented yet...!!");
 
 }
