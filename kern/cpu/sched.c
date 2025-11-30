@@ -14,7 +14,7 @@
 uint32 starvation_threshold =0;
 uint8 *quantums ;
 uint8 num_of_ready_queues=0;
-struct Env_Queue * env_ready_queues;
+struct Env_Queue *env_ready_queues;
 
 uint32 isSchedMethodRR(){return (scheduler_method == SCH_RR);}
 uint32 isSchedMethodMLFQ(){return (scheduler_method == SCH_MLFQ); }
@@ -225,7 +225,7 @@ void sched_init_BSD(uint8 numOfLevels, uint8 quantum)
 //======================================
 void sched_init_PRIRR(uint8 numOfPriorities, uint8 quantum, uint32 starvThresh)
 {
-	starvation_threshold =starvThresh;
+	sched_set_starv_thresh(starvThresh);
 	num_of_ready_queues = numOfPriorities;
 #if USE_KHEAP
 	sched_delete_ready_queues();
