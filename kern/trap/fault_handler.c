@@ -196,7 +196,7 @@ void fault_handler(struct Trapframe *tf)
 	{
 		if (userTrap)
 		{
-			if (fault_va >= USER_TOP)
+			if (fault_va >= USER_TOP && fault_va < USER_LIMIT && (tf->tf_err & FEC_WR))
 			{
 				env_exit();
 			}
