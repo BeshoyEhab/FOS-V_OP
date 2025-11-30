@@ -700,6 +700,7 @@ void env_set_priority(int envID, int priority)
 		if(proc->priority != priority){
 			sched_remove_ready(proc);
 			proc->priority=priority;
+			proc->env_tick=ticks;
 			sched_insert_ready(proc);
 		}
 	}else {
