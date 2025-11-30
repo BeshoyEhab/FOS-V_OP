@@ -932,9 +932,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			}
 		}
 	}
-// #else
-// 	int iWS = faulted_env->page_last_WS_index;
-// 	uint32 wsSize = env_page_ws_get_size(faulted_env);
 #endif
 }
 

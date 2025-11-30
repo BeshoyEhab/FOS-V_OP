@@ -171,8 +171,9 @@ int create_shared_object(int32 ownerID, char *shareName, uint32 size, uint8 isWr
 		share->framesStorage[j] = frameinfo;
 		j++;
 	}
-
+	acquire_kspinlock(&AllShares.shareslock);
 	LIST_INSERT_TAIL(&AllShares.shares_list, share);
+	release_kspinlock(&AllShares.shareslock);
 	return share->ID;
 }
 
@@ -197,7 +198,7 @@ int get_shared_object(int32 ownerID, char *shareName, void *virtual_address)
 	for (uint32 i = virtual_address; i < (virtual_address + (num * PAGE_SIZE)); i += PAGE_SIZE)
 	{
 		struct FrameInfo *frameinfo = share->framesStorage[j];
-		map_frame(myenv->env_page_directory, frameinfo, i, PERM_USER | share->isWritable ? PERM_WRITEABLE : 0 | PERM_PRESENT);
+		map_frame(myenv->env_page_directory, frameinfo, i, PERM_USER | PERM_PRESENT | (share->isWritable ? PERM_WRITEABLE : 0));
 
 		j++;
 	}
