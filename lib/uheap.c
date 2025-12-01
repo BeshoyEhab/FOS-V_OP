@@ -125,7 +125,6 @@ uint32 custom_fit(uint32 size)
 
 	struct uheapPageSegment *segment = NULL;
 	//* Exact-fit
-	cprintf("iam exact fit \n");
 	LIST_FOREACH(segment, &free_Upages_segments)
 	{
 		if (segment->pageCount == required_pages)
@@ -139,7 +138,6 @@ uint32 custom_fit(uint32 size)
 
 	//* Worst-fit
 
-	cprintf("iam in worst fit :: ");
 	struct uheapPageSegment *max_sized_segment = NULL;
 	LIST_FOREACH(segment, &free_Upages_segments)
 	{
@@ -155,8 +153,6 @@ uint32 custom_fit(uint32 size)
 	if (max_sized_segment != NULL && size < max_sized_segment->pageCount * PAGE_SIZE)
 	{
 
-		cprintf(":: with seg Pcount : %x\n", max_sized_segment->pageCount);
-
 		uint32 result_va;
 		uint32 split_status = split_segment(max_sized_segment, required_pages, &result_va);
 		if (split_status == 1)
@@ -170,7 +166,6 @@ uint32 custom_fit(uint32 size)
 	//* Break-update
 	if (uheapPageAllocBreak < USER_HEAP_MAX - (required_pages * PAGE_SIZE))
 	{
-		cprintf("\n iam in update break \n");
 		uint32 new_break = uheapPageAllocBreak + required_pages * PAGE_SIZE;
 
 		// Check for break overflow
@@ -420,7 +415,7 @@ void *sget(int32 ownerEnvID, char *sharedVarName)
 		return NULL;
 	}
 	void *virsual_aderss = malloc(ROUNDUP(size, PAGE_SIZE));
-	
+
 	if (virsual_aderss == NULL)
 	{
 		return NULL;

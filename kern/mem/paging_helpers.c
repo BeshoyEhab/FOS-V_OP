@@ -58,13 +58,13 @@ inline int pt_get_page_permissions(uint32 *directory, uint32 virtual_address)
 	//[2] If exists, return the permissions
 	if (ret == 0)
 	{
-		cprintf("va=%x perm = %x\n", virtual_address, ptr_page_table[PTX(virtual_address)] & 0x00000FFF);
+		// cprintf("va=%x perm = %x\n", virtual_address, ptr_page_table[PTX(virtual_address)] & 0x00000FFF);
 		return (ptr_page_table[PTX(virtual_address)] & 0xFFF);
 	}
 	//[3] Else, return -1
 	else
 	{
-		cprintf("va=%x not exist and has no page table\n", virtual_address);
+		// cprintf("va=%x not exist and has no page table\n", virtual_address);
 		return -1;
 	}
 

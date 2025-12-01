@@ -196,25 +196,23 @@ void fault_handler(struct Trapframe *tf)
 	{
 		if (userTrap)
 		{
-			if (fault_va >= USER_TOP)
-			{
-				print_trapframe(tf);
-				cprintf("User process accessing protected address space >= USER_TOP. Exiting. fva: %x, user_top: %x, and kernel base: %x\n", fault_va, USER_TOP, KERNEL_BASE);
-				env_exit();
-			}
+			if (fault_va >= USER_TOP) { 
+        if (fault_va >= USER_LIMIT || (fault_va < USER_LIMIT && (tf->tf_err & FEC_WR)))
+			  {
+				  env_exit();
+			  }
+      }
 
 			int perm = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
 
 			if (!(perm & PERM_UHPAGE) && fault_va >= USER_HEAP_START && fault_va <= USER_HEAP_MAX)
 
 			{
-				cprintf("User process accessing unmarked page in heap. Exiting.\n");
 				env_exit();
 			}
 
 			if ((perm & PERM_PRESENT) && !(perm & PERM_WRITEABLE) && (tf->tf_err & FEC_WR))
 			{
-				// cprintf("\n=============\nUser process accessing unmarked page in heap. Exiting.\n");
 				env_exit();
 			}
 		}
@@ -515,7 +513,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			{
 				if (!((ROUNDDOWN(fault_va, PAGE_SIZE) >= USER_HEAP_START && ROUNDDOWN(fault_va, PAGE_SIZE) < USER_HEAP_MAX) || (ROUNDDOWN(fault_va, PAGE_SIZE) >= USTACKBOTTOM && ROUNDDOWN(fault_va, PAGE_SIZE) < USTACKTOP)))
 				{
-					cprintf("In the env Exit\n");
 					env_exit();
 				}
 			}
@@ -545,9 +542,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			{
 				// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
 				struct WorkingSetElement *victim = clearUsed(faulted_env);
-				cprintf("\n==============\nThe working set before the edit: \n\n");
-				env_page_ws_print(faulted_env);
-				cprintf("\nAnd the victim va is: %x\n==================\n", victim->virtual_address);
 
 				// Get victim's frame info using get_frame_info (NOT get_page_table)
 				uint32 *victim_ptr_page_table = NULL;
