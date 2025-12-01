@@ -5,7 +5,7 @@
 //==================================================================================//
 struct free_Upages_segments free_Upages_segments;
 struct allocated_Upages_segments allocated_Upages_segments;
-
+//*
 #define MAX_SEGMENTS 768
 //*
 uint32 custom_fit(uint32 required_pages);
@@ -14,9 +14,6 @@ int split_segment(struct uheapPageSegment *segment, uint32 required_pages, uint3
 struct uheapPageSegment *find_page_segment(uint32 va);
 void merge_free_segments(struct uheapPageSegment *segment);
 int update_break_after_free(void);
-
-//*
-
 //*
 static struct uheapPageSegment usegment_pool[MAX_SEGMENTS];
 static int usegment_pool_used[MAX_SEGMENTS];
@@ -107,24 +104,18 @@ int split_segment(struct uheapPageSegment *segment, uint32 required_pages, uint3
 //* Custom fit strategy implementation
 uint32 custom_fit(uint32 size)
 {
-
 	if (size == 0)
 		return NULL;
 
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
-	// if (required_pages == 117753)
-	// 	return NULL;
 
-	// cprintf("\ncustom_fit called with size: %d, required_pages: %d\n",size, required_pages);
-
-	// means that no free segments and no enough space to break
 	if (LIST_EMPTY(&free_Upages_segments) && uheapPageAllocBreak + required_pages * PAGE_SIZE > USER_HEAP_MAX)
 	{
 		return NULL;
 	}
 
-	struct uheapPageSegment *segment = NULL;
 	//* Exact-fit
+	struct uheapPageSegment *segment = NULL;
 	LIST_FOREACH(segment, &free_Upages_segments)
 	{
 		if (segment->pageCount == required_pages)
@@ -137,7 +128,6 @@ uint32 custom_fit(uint32 size)
 	}
 
 	//* Worst-fit
-
 	struct uheapPageSegment *max_sized_segment = NULL;
 	LIST_FOREACH(segment, &free_Upages_segments)
 	{
@@ -149,7 +139,6 @@ uint32 custom_fit(uint32 size)
 			}
 		}
 	}
-
 	if (max_sized_segment != NULL && size < max_sized_segment->pageCount * PAGE_SIZE)
 	{
 
@@ -159,7 +148,6 @@ uint32 custom_fit(uint32 size)
 		{
 			return NULL;
 		}
-		// sys_allocate_user_mem(result_va, size);
 		return result_va;
 	}
 
@@ -168,7 +156,7 @@ uint32 custom_fit(uint32 size)
 	{
 		uint32 new_break = uheapPageAllocBreak + required_pages * PAGE_SIZE;
 
-		// Check for break overflow
+		// Check for break overflow additional check for size overflow
 		if (new_break < uheapPageAllocBreak || new_break > USER_HEAP_MAX)
 		{
 			return NULL;
@@ -183,18 +171,14 @@ uint32 custom_fit(uint32 size)
 		newseg->pageCount = required_pages;
 		newseg->startPage_va = uheapPageAllocBreak;
 
-		//* Allocate user memory for the new segment
 		sys_allocate_user_mem(newseg->startPage_va, size);
-
 		uheapPageAllocBreak = new_break;
-
 		LIST_INSERT_TAIL(&allocated_Upages_segments, newseg);
 
 		return newseg->startPage_va;
 	}
 
 	return NULL;
-	// TODO: **ERROR** can not allocate return 1
 }
 
 //=================================
@@ -202,8 +186,6 @@ uint32 custom_fit(uint32 size)
 //=================================
 void *malloc(uint32 size)
 {
-	// cprintf("\n\n\n\nmalloc called with size %d\n", size);
-
 	//==============================================================
 	// DON'T CHANGE THIS CODE========================================
 	uheap_init();
@@ -217,11 +199,9 @@ void *malloc(uint32 size)
 	{
 		return alloc_block(size);
 	}
-	// Convert given size from bytes to pages
-
+	// else allocate using the custom fit strategy
 	return (void *)custom_fit(size);
 
-	// return result;
 	// Comment the following line
 	// panic("malloc() is not implemented yet...!!");
 }
@@ -236,7 +216,6 @@ struct uheapPageSegment *find_page_segment(uint32 va)
 	struct uheapPageSegment *seg = LIST_FIRST(&allocated_Upages_segments);
 	LIST_FOREACH(seg, &allocated_Upages_segments)
 	{
-
 		if (seg->startPage_va == aligned_va)
 		{
 			return seg;
@@ -253,6 +232,7 @@ void merge_free_segments(struct uheapPageSegment *segment)
 	struct uheapPageSegment *next_seg = NULL;
 	int found_prev = 0;
 	int found_next = 0;
+
 	// Find adjacent segments
 	struct uheapPageSegment *seg = NULL;
 	LIST_FOREACH(seg, &free_Upages_segments)
@@ -268,30 +248,34 @@ void merge_free_segments(struct uheapPageSegment *segment)
 			found_next = 1;
 		}
 	}
+
 	// Merge all three: prev + segment + next
 	if (found_prev && found_next)
 	{
 		prev_seg->pageCount += segment->pageCount + next_seg->pageCount;
 		LIST_REMOVE(&free_Upages_segments, next_seg);
-		free_segment_struct(next_seg); // ✅ Free next
-		free_segment_struct(segment);  // ✅ Free segment
+		free_segment_struct(next_seg);
+		free_segment_struct(segment);
 		return;
 	}
+
 	// Merge with previous only
 	if (found_prev)
 	{
 		prev_seg->pageCount += segment->pageCount;
-		free_segment_struct(segment); // ✅ Free segment
+		free_segment_struct(segment);
 		return;
 	}
+
 	// Merge with next only
 	if (found_next)
 	{
 		next_seg->startPage_va = segment->startPage_va;
 		next_seg->pageCount += segment->pageCount;
-		free_segment_struct(segment); // ✅ Free segment
+		free_segment_struct(segment);
 		return;
 	}
+
 	// No merge - add to free list
 	LIST_INSERT_TAIL(&free_Upages_segments, segment);
 }
@@ -320,7 +304,7 @@ int update_break_after_free(void)
 		{
 			uheapPageAllocBreak = seg->startPage_va;
 			LIST_REMOVE(&free_Upages_segments, seg);
-			free_segment_struct(seg); // ✅ Free it
+			free_segment_struct(seg);
 			return 0;
 		}
 	}
@@ -363,9 +347,7 @@ void free(void *virtual_address)
 		update_break_after_free();
 		return;
 	}
-
 	// Comment the following line
-	panic("there is an error in free function");
 	// panic("free() is not implemented yet...!!");
 }
 
@@ -381,15 +363,15 @@ void *smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 		return NULL;
 	//==============================================================
 
-	void *virsual_adress = malloc(ROUNDUP(size, PAGE_SIZE));
-	if (virsual_adress == NULL)
+	void *virtual_address = malloc(ROUNDUP(size, PAGE_SIZE));
+	if (virtual_address == NULL)
 	{
 		return NULL;
 	}
-	uint32 ID = sys_create_shared_object(sharedVarName, ROUNDUP(size, PAGE_SIZE), isWritable, virsual_adress);
+	uint32 ID = sys_create_shared_object(sharedVarName, ROUNDUP(size, PAGE_SIZE), isWritable, virtual_address);
 	if (ID == E_SHARED_MEM_EXISTS || ID == E_NO_SHARE)
 	{
-		free(virsual_adress);
+		free(virtual_address);
 		return NULL;
 	}
 
@@ -397,7 +379,7 @@ void *smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 	// Your code is here
 	// Comment the following line
 	// panic("smalloc() is not implemented yet...!!");
-	return virsual_adress;
+	return virtual_address;
 }
 
 //========================================
@@ -414,17 +396,17 @@ void *sget(int32 ownerEnvID, char *sharedVarName)
 	{
 		return NULL;
 	}
-	void *virsual_aderss = malloc(ROUNDUP(size, PAGE_SIZE));
+	void *virtual_address = malloc(ROUNDUP(size, PAGE_SIZE));
 
-	if (virsual_aderss == NULL)
+	if (virtual_address == NULL)
 	{
 		return NULL;
 	}
-	uint32 ID = sys_get_shared_object(ownerEnvID, sharedVarName, virsual_aderss);
+	uint32 ID = sys_get_shared_object(ownerEnvID, sharedVarName, virtual_address);
 
 	if (ID == E_SHARED_MEM_EXISTS)
 	{
-		free(virsual_aderss);
+		free(virtual_address);
 		return NULL;
 	}
 
@@ -432,7 +414,7 @@ void *sget(int32 ownerEnvID, char *sharedVarName)
 	// Your code is here
 	// Comment the following line
 	// panic("sget() is not implemented yet...!!");
-	return virsual_aderss;
+	return virtual_address;
 }
 
 //==================================================================================//
