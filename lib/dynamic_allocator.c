@@ -21,6 +21,13 @@ __inline__ uint32 to_page_va(struct PageInfoElement *ptrPageInfo)
 	return dynAllocStart + (idxInPageInfoArr << PGSHIFT);
 }
 
+//bounus global vars
+struct PendingRequest {
+    uint32 size;
+    LIST_ENTRY(PendingRequest) prev_next;
+};
+LIST_HEAD(PendingList, PendingRequest) pendingQueue;
+
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
@@ -48,6 +55,10 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	//==================================================================================
 	//TODO: [PROJECT'25.GM#1] DYNAMIC ALLOCATOR - #1 initialize_dynamic_allocator
 	//Your code is here
+
+	//for bonus function
+	LIST_INIT(&pendingQueue);
+
 
 	//initialize the page info arr & block list
 	dynAllocStart = daStart;
@@ -164,7 +175,13 @@ void *alloc_block(uint32 size)
 			LIST_REMOVE(&freeBlockLists[tmp],block);
 
 		}else{
-			panic("alloc_block: no block available at any size");
+			//panic("alloc_block: no block available at any size");
+
+			struct PendingRequest *req = kmalloc(sizeof(struct PendingRequest));
+			req->size = size;
+
+			LIST_INSERT_TAIL(&pendingQueue, req);
+			return NULL;
 		}
 
 	}
@@ -237,6 +254,20 @@ void free_block(void *va)
 		PageInfo->num_of_free_blocks = 0;
 		LIST_INSERT_HEAD(&freePagesList, PageInfo);
 	}
+
+	//the bounus function adding
+	if (!LIST_EMPTY(&pendingQueue)) {
+
+		struct PendingRequest *req = LIST_FIRST(&pendingQueue);
+
+		void *p = alloc_block(req->size);
+
+		if (p != NULL) {
+			LIST_REMOVE(&pendingQueue, req);
+			kfree(req);
+		}
+	}
+
 	//Comment the following line
 	//panic("free_block() Not implemented yet");
 }
@@ -244,6 +275,9 @@ void free_block(void *va)
 //==================================================================================//
 //============================== BONUS FUNCTIONS ===================================//
 //==================================================================================//
+
+//Global vars for it at top
+
 
 //===========================
 // [1] REALLOCATE BLOCK:
