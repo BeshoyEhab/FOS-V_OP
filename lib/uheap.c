@@ -461,7 +461,11 @@ void sfree(void *virtual_address)
 	// Your code is here
 	// Comment the following line
 	// panic("sfree() is not implemented yet...!!");
-	
+	int32 ID = sys_get_shared_object_by_ID(virtual_address);
+	if (ID != E_SHARED_MEM_NOT_EXISTS)
+	{
+		sys_delete_shared_object(ID, virtual_address);
+	}
 
 	//	1) you should find the ID of the shared variable at the given address
 	//	2) you need to call sys_freeSharedObject()

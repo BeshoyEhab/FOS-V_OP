@@ -314,3 +314,34 @@ int delete_shared_object(int32 sharedObjectID, void *startVA)
 	//	5) If this is the last share, delete the share object (use free_share())
 	//	6) Flush the cache "tlbflush()"
 }
+
+uint32 get_shared_object_by_ID(uint32 virsual_address)
+{
+    //this func not efficient in the time complexity because it use nested loop but solve the problem
+    struct Env *myenv = get_cpu_proc();
+	uint32 *ptr_p_t =NULL;
+	get_page_table(myenv->env_page_directory,virsual_address,&ptr_p_t);
+	struct Frame_Info *frame_info =get_frame_info(myenv->env_page_directory,virsual_address,&ptr_p_t);
+	if (frame_info == NULL)
+    {
+        return E_SHARED_MEM_NOT_EXISTS; 
+    }
+	
+	struct Share *share_itter = NULL;
+    acquire_kspinlock(&AllShares.shareslock);
+    LIST_FOREACH(share_itter, &AllShares.shares_list)
+    {
+        for (int i = 0; i < ROUNDUP(share_itter->size,PAGE_SIZE)/PAGE_SIZE; i ++) 
+        {
+            if (share_itter->framesStorage[i] == frame_info)
+            {
+                int32 id = share_itter->ID;
+                release_kspinlock(&AllShares.shareslock);
+                return id; 
+            }
+        }
+    }
+    release_kspinlock(&AllShares.shareslock);
+    return E_SHARED_MEM_NOT_EXISTS;
+
+}

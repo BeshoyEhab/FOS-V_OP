@@ -130,6 +130,11 @@ int sys_size_of_shared_object(int32 ownerID, char* shareName)
 }
 //==========
 
+uint32 sys_get_shared_object_by_ID(uint32 virsual_address)
+{
+	return syscall(SYS_get_shared_object_by_ID,(uint32)virsual_address,0,0,0,0);
+}
+
 int sys_get_shared_object(int32 ownerID, char* shareName, void* virtual_address)
 {
 	return syscall(SYS_get_shared_object,(uint32) ownerID, (uint32)shareName, (uint32)virtual_address, 0, 0);
