@@ -460,7 +460,8 @@ void sfree(void *virtual_address)
 	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - sfree
 	// Your code is here
 	// Comment the following line
-	panic("sfree() is not implemented yet...!!");
+	// panic("sfree() is not implemented yet...!!");
+	
 
 	//	1) you should find the ID of the shared variable at the given address
 	//	2) you need to call sys_freeSharedObject()

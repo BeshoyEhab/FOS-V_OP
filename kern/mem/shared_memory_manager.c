@@ -225,8 +225,13 @@ void free_share(struct Share *ptrShare)
 {
 	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - free_share
 	// Your code is here
+	kfree((uint32)ptrShare->framesStorage);
+	acquire_kspinlock(&AllShares.shareslock);
+	LIST_REMOVE(&AllShares.shares_list, ptrShare);
+	release_kspinlock(&AllShares.shareslock);
+	kfree((uint32)ptrShare);
 	// Comment the following line
-	panic("free_share() is not implemented yet...!!");
+	// panic("free_share() is not implemented yet...!!");
 }
 
 //=========================
@@ -237,10 +242,64 @@ int delete_shared_object(int32 sharedObjectID, void *startVA)
 	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - delete_shared_object
 	// Your code is here
 	// Comment the following line
-	panic("delete_shared_object() is not implemented yet...!!");
+	// panic("delete_shared_object() is not implemented yet...!!");
 
 	struct Env *myenv = get_cpu_proc(); // The calling environment
+	struct Share *share_itter = NULL;
+	struct Share *share = NULL;
+	acquire_kspinlock(&AllShares.shareslock);
+	LIST_FOREACH(share_itter, &AllShares.shares_list)
+	{
+		if (share_itter->ID == sharedObjectID)
+		{
+			share = share_itter;
+			break;
+		}
+	}
+	release_kspinlock(&AllShares.shareslock);
 
+	share->size;
+	if (share == NULL)
+	{
+		return E_SHARED_MEM_NOT_EXISTS;
+	}
+
+	uint32 va = startVA;
+	int num_of_frames = ROUNDUP(share->size, PAGE_SIZE) / PAGE_SIZE;
+	for (int i = 0; i < num_of_frames; i++)
+	{
+		unmap_frame(myenv->env_page_directory, va);
+		uint32 *ptr_p_t = NULL;
+		int c = 0;
+		get_page_table(myenv->env_page_directory, va, &ptr_p_t);
+		if (ptr_p_t != NULL)
+		{
+
+			for (int j = 0; j < NPTENTRIES; j++)
+			{
+				if (ptr_p_t[j] & PERM_PRESENT)
+				{
+					c++;
+					break;
+				}
+			}
+			if (c == 0)
+			{
+				del_page_table(myenv->env_page_directory, va);
+				pd_clear_page_dir_entry(myenv->env_page_directory, va);
+			}
+		}
+		va += PAGE_SIZE;
+	}
+
+	share->references--;
+	if (share->references == 0)
+	{
+		free_share(share);
+	}
+
+	tlbflush();
+	return 0;
 	// This function should free (delete) the shared object from the User Heapof the current environment
 	// If this is the last shared env, then the "frames_store" should be cleared and the shared object should be deleted
 	// RETURN:
