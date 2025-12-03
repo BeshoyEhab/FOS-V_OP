@@ -146,26 +146,20 @@ void *sys_sbrk(int numOfPages)
 //=====================================
 void allocate_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 {
-	// cprintf("\n\n\n\nallocate_user_mem called with size %d\n", size);
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #2 allocate_user_mem
 	// Your code is here
-	// virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	uint32 *page_table = NULL;
 
 	for (uint32 va = virtual_address; required_pages; required_pages--, va += PAGE_SIZE)
 	{
-		// cprintf("$: ");
 		int ret = get_page_table(e->env_page_directory, va, &page_table);
-
 		if (ret == TABLE_NOT_EXIST)
 		{
 			create_page_table(e->env_page_directory, va);
 		}
-
 		pt_set_page_permissions(e->env_page_directory, va, PERM_UHPAGE, 0);
 	}
-
 	// Comment the following line
 	//  panic("allocate_user_mem() is not implemented yet...!!");
 }
@@ -177,9 +171,11 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 {
 	// TODO: [PROJECT'25.IM#2] USER HEAP - #4 free_user_mem
 	// Your code is here
+
 	// Calculate number of pages
 	int page_count = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	uint32 *page_table = NULL;
+
 	// Iterate through all pages in the range
 	for (uint32 va = virtual_address; page_count; page_count--, va += PAGE_SIZE)
 	{
@@ -189,6 +185,7 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 		{
 			continue;
 		}
+
 		// Unmark the page (logic: allow future allocation)
 		pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
 		// Remove from Page File
@@ -199,6 +196,7 @@ void free_user_mem(struct Env *e, uint32 virtual_address, uint32 size)
 		{
 			continue; // Not in RAM, done with this page
 		}
+
 		struct WorkingSetElement *ws_element = NULL;
 		LIST_FOREACH(ws_element, &(e->page_WS_list))
 		{

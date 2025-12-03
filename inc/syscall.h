@@ -27,6 +27,7 @@ enum
 	SYS_clearFFL,
 	SYS_create_shared_object,
 	SYS_get_size_of_shared_object,
+	SYS_get_shared_object_by_ID,
 	SYS_get_shared_object,
 	SYS_free_shared_object,
 	SYS_create_env,

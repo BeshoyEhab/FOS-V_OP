@@ -144,7 +144,7 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
 		return -1;
 	}
 
-	return 0; ///< in case of success
+	return 0; // in case of success
 }
 
 //* Split a segment into two segments
@@ -176,7 +176,7 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, ui
 				uint32 rva = new_segment->startPage_va + j * PAGE_SIZE;
 				unmap_frame(ptr_page_directory, ROUNDDOWN(rva, PAGE_SIZE));
 			}
-			free_segment_struct(new_segment); // kfree(new_segment);
+			free_segment_struct(new_segment);
 			return 1;
 		}
 	}
@@ -188,7 +188,6 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, ui
 //* the strategy fo allocate Block of pages (Segments of pages)
 void *custom_fit(uint32 required_pages)
 {
-
 	if (required_pages == 0)
 		return NULL;
 
@@ -198,8 +197,8 @@ void *custom_fit(uint32 required_pages)
 		return NULL;
 	}
 
+	//* Exact-fit
 	struct kheapPageSegment *segment = NULL;
-	// Exact-fit
 	LIST_FOREACH(segment, &free_pages_segments)
 	{
 		if (segment->pageCount == required_pages)
@@ -224,7 +223,7 @@ void *custom_fit(uint32 required_pages)
 		}
 	}
 
-	// Worst-fit
+	//* Worst-fit
 	struct kheapPageSegment *max_sized_segment = NULL;
 	LIST_FOREACH(segment, &free_pages_segments)
 	{
@@ -236,7 +235,6 @@ void *custom_fit(uint32 required_pages)
 			}
 		}
 	}
-
 	if (max_sized_segment != NULL)
 	{
 		uint32 result_va;
@@ -248,7 +246,7 @@ void *custom_fit(uint32 required_pages)
 		return (void *)result_va;
 	}
 
-	// Break-update
+	//* Break-update
 	if ((kheapPageAllocBreak + (required_pages * PAGE_SIZE)) <= KERNEL_HEAP_MAX)
 	{
 
@@ -308,7 +306,6 @@ void *kmalloc(unsigned int size)
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
 	if (size == 0)
 		return NULL;
-	// cprintf("the size is greater than 0 in kmalloc\n");
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
 	{
 		// we need to make lock while allocation
@@ -324,12 +321,10 @@ void *kmalloc(unsigned int size)
 
 		if (va != NULL)
 		{
-			// cprintf("the va is not null it will return the va from the alloc block: %x\n", va);
 			return va;
 		}
 		else
 		{
-			// cprintf("the va is null it will not return the va from the alloc block\n");
 			return NULL;
 		}
 	}
@@ -345,18 +340,16 @@ void *kmalloc(unsigned int size)
 	uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
 	// struct kheapPagesBlock *block = NULL;
 
-	// TODO: int custom_fit(uint32 required_pages); , return the status 0 sucsess , 1 fail , -1 panic
+	// TODO: int custom_fit(uint32 required_pages); , return the status 0 success , 1 fail , -1 panic
 	void *result = custom_fit(required_pages);
 
 	if (!is_holding_page_lock)
 		release_kspinlock(&kheap_page_lock);
 
-	// cprintf("the result is not null it will return the va from the custom fit\n");
 	return result;
 
 	// Comment the following line
 	// kpanic_into_prompt("kmalloc() is not implemented yet...!!");
-
 	// TODO: [PROJECT'25.BONUS#3] FAST PAGE ALLOCATOR
 }
 
