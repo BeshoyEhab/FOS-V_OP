@@ -78,6 +78,9 @@ void command_prompt_readline(const char *prompt, char* buf) {
 	echoing = iscons(0);
 	bool is_run_cmd = 0;
 	bool is_tst_cmd = 0;
+	
+	// Initialize buffer to prevent garbage data
+	memset(buf, 0, BUFLEN);
 
 	while (1) {
 		c = getchar();
@@ -224,25 +227,57 @@ void command_prompt_readline(const char *prompt, char* buf) {
 				cputchar(c);
 			}
 		}
-		else if (c == 0xE9 && i > 0) {		 // KEY_DEL
-			for (int var = i; var <= lastIndex; ++var) {
-				buf[var] = buf[var + 1];
+		else if (c == 0xE9) {		 // KEY_DEL
+			if (i < lastIndex) {
+				// Shift buffer left
+				for (int var = i; var <= lastIndex; ++var) {
+					buf[var] = buf[var + 1];
+				}
+				lastIndex--;
+				buf[lastIndex] = 0; // Explicitly null-terminate
+				
+				// Redraw screen: print remaining chars + space, then move cursor back
+				if (echoing) {
+					for (int j = i; j < lastIndex; j++)
+						cputchar(buf[j]);
+					cputchar(' ');  // Clear the last position
+					
+					// Move cursor back to position using non-destructive Left Arrow (228)
+					int chars_to_move_back = lastIndex - i + 1;
+					for (int j = 0; j < chars_to_move_back; j++)
+						cputchar(228);
+				}
 			}
-			lastIndex--;
 		}
 		else if (c >= ' ' && i < BUFLEN - 1 && c != 229 && c != 228) {
 			if (echoing)
 				cputchar(c);
 			buf[i++] = c;
-			lastIndex++;
+			if (i > lastIndex)
+				lastIndex = i;
 		} else if (c == '\b' && i > 0) {
-
 			if (echoing)
 				cputchar(c);
-			for (int var = i; var <= i; ++var) {
+			
+			// Shift buffer left
+			for (int var = i; var <= lastIndex; ++var) {
 				buf[var - 1] = buf[var];
 			}
 			i--;
+			lastIndex--;
+			buf[lastIndex] = 0; // Explicitly null-terminate
+			
+			// Redraw screen: print remaining chars + space, then move cursor back
+			if (echoing) {
+				for (int j = i; j < lastIndex; j++)
+					cputchar(buf[j]);
+				cputchar(' ');  // Clear the last position
+				
+				// Move cursor back to position using non-destructive Left Arrow (228)
+				int chars_to_move_back = lastIndex - i + 1;
+				for (int j = 0; j < chars_to_move_back; j++)
+					cputchar(228);
+			}
 		} else if (c == '\n' || c == '\r') {
 
 			if (echoing)
