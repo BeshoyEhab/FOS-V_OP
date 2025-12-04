@@ -90,6 +90,7 @@ int 	sys_pf_calculate_allocated_pages(void);
 //2017
 int 	sys_create_shared_object(char* shareName, uint32 size, uint8 isWritable, void* virtual_address);
 int 	sys_size_of_shared_object(int32 ownerID, char* shareName);
+uint32  sys_get_shared_object_by_ID(uint32 virsual_address);
 int 	sys_get_shared_object(int32 ownerID, char* shareName, void* virtual_address );
 int 	sys_delete_shared_object(int32 sharedObjectID, void *startVA);
 

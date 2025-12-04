@@ -156,6 +156,8 @@ int create_shared_object(int32 ownerID, char *shareName, uint32 size, uint8 isWr
 		int a_f = allocate_frame(&frameinfo);
 		if (a_f == E_NO_MEM)
 		{
+			kfree(share);
+			kfree(share->framesStorage);
 			return E_NO_SHARE;
 		}
 		a_f = map_frame(myenv->env_page_directory, frameinfo, i, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
@@ -165,15 +167,26 @@ int create_shared_object(int32 ownerID, char *shareName, uint32 size, uint8 isWr
 			{
 				unmap_frame(myenv->env_page_directory, k);
 			}
+			kfree(share);
+			kfree(share->framesStorage);
 			return E_NO_SHARE;
 		}
 
 		share->framesStorage[j] = frameinfo;
 		j++;
 	}
-	acquire_kspinlock(&AllShares.shareslock);
-	LIST_INSERT_TAIL(&AllShares.shares_list, share);
-	release_kspinlock(&AllShares.shareslock);
+	bool wasHeld = holding_kspinlock(&(AllShares.shareslock));
+	if (!wasHeld)
+	{
+		acquire_kspinlock(&(AllShares.shareslock));
+	}
+	{
+		LIST_INSERT_TAIL(&AllShares.shares_list, share);
+	}
+	if (!wasHeld)
+	{
+		release_kspinlock(&(AllShares.shareslock));
+	}
 	return share->ID;
 }
 
@@ -225,8 +238,22 @@ void free_share(struct Share *ptrShare)
 {
 	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - free_share
 	// Your code is here
+	kfree((uint32)ptrShare->framesStorage);
+	bool wasHeld = holding_kspinlock(&(AllShares.shareslock));
+	if (!wasHeld)
+	{
+		acquire_kspinlock(&(AllShares.shareslock));
+	}
+	{
+		LIST_REMOVE(&AllShares.shares_list, ptrShare);
+	}
+	if (!wasHeld)
+	{
+		release_kspinlock(&(AllShares.shareslock));
+	}
+	kfree((uint32)ptrShare);
 	// Comment the following line
-	panic("free_share() is not implemented yet...!!");
+	// panic("free_share() is not implemented yet...!!");
 }
 
 //=========================
@@ -237,10 +264,75 @@ int delete_shared_object(int32 sharedObjectID, void *startVA)
 	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - delete_shared_object
 	// Your code is here
 	// Comment the following line
-	panic("delete_shared_object() is not implemented yet...!!");
+	// panic("delete_shared_object() is not implemented yet...!!");
 
 	struct Env *myenv = get_cpu_proc(); // The calling environment
+	struct Share *share_itter = NULL;
+	struct Share *share = NULL;
+	bool wasHeld = holding_kspinlock(&(AllShares.shareslock));
+	if (!wasHeld)
+	{
+		acquire_kspinlock(&(AllShares.shareslock));
+	}
+	{
+		LIST_FOREACH(share_itter, &AllShares.shares_list)
+		{
+			if (share_itter->ID == sharedObjectID)
+			{
+				share = share_itter;
+				break;
+			}
+		}
+	}
+	if (!wasHeld)
+	{
+		release_kspinlock(&(AllShares.shareslock));
+	}
 
+	share->size;
+	if (share == NULL)
+	{
+		return E_SHARED_MEM_NOT_EXISTS;
+	}
+
+	uint32 va = startVA;
+	int num_of_frames = ROUNDUP(share->size, PAGE_SIZE) / PAGE_SIZE;
+	for (int i = 0; i < num_of_frames; i++)
+	{
+		unmap_frame(myenv->env_page_directory, va);
+		uint32 *ptr_p_t = NULL;
+		int c = 0;
+		get_page_table(myenv->env_page_directory, va, &ptr_p_t);
+		if (ptr_p_t != NULL)
+		{
+
+			for (int j = 0; j < NPTENTRIES; j++)
+			{
+				if (ptr_p_t[j] & PERM_PRESENT)
+				{
+					c++;
+					break;
+				}
+			}
+			if (c == 0)
+			{
+				uint32 pde_index = PDX(va);
+				uint32 va_base = pde_index << PDXSHIFT;
+				del_page_table(myenv->env_page_directory, va_base);
+				pd_clear_page_dir_entry(myenv->env_page_directory, va_base);
+			}
+		}
+		va += PAGE_SIZE;
+	}
+
+	share->references--;
+	if (share->references == 0)
+	{
+		free_share(share);
+	}
+
+	tlbflush();
+	return 0;
 	// This function should free (delete) the shared object from the User Heapof the current environment
 	// If this is the last shared env, then the "frames_store" should be cleared and the shared object should be deleted
 	// RETURN:
@@ -254,4 +346,45 @@ int delete_shared_object(int32 sharedObjectID, void *startVA)
 	//	4) Update references
 	//	5) If this is the last share, delete the share object (use free_share())
 	//	6) Flush the cache "tlbflush()"
+}
+
+uint32 get_shared_object_by_ID(uint32 virsual_address)
+{
+	// this func not efficient in the time complexity because it use nested loop but solve the problem
+	struct Env *myenv = get_cpu_proc();
+	uint32 *ptr_p_t = NULL;
+	get_page_table(myenv->env_page_directory, virsual_address, &ptr_p_t);
+	struct Frame_Info *frame_info = get_frame_info(myenv->env_page_directory, virsual_address, &ptr_p_t);
+	if (frame_info == NULL)
+	{
+		return E_SHARED_MEM_NOT_EXISTS;
+	}
+
+	struct Share *share_itter = NULL;
+	bool wasHeld = holding_kspinlock(&(AllShares.shareslock));
+	if (!wasHeld)
+	{
+		acquire_kspinlock(&(AllShares.shareslock));
+	}
+	LIST_FOREACH(share_itter, &AllShares.shares_list)
+	{
+		for (int i = 0; i < ROUNDUP(share_itter->size, PAGE_SIZE) / PAGE_SIZE; i++)
+		{
+			if (share_itter->framesStorage[i] == frame_info)
+			{
+				int32 id = share_itter->ID;
+
+				if (!wasHeld)
+				{
+					release_kspinlock(&(AllShares.shareslock));
+				}
+				return id;
+			}
+		}
+	}
+	if (!wasHeld)
+	{
+		release_kspinlock(&(AllShares.shareslock));
+	}
+	return E_SHARED_MEM_NOT_EXISTS;
 }
