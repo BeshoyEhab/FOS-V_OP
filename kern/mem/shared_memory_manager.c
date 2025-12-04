@@ -156,6 +156,8 @@ int create_shared_object(int32 ownerID, char *shareName, uint32 size, uint8 isWr
 		int a_f = allocate_frame(&frameinfo);
 		if (a_f == E_NO_MEM)
 		{
+			kfree(share);
+			kfree(share->framesStorage);
 			return E_NO_SHARE;
 		}
 		a_f = map_frame(myenv->env_page_directory, frameinfo, i, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
@@ -165,6 +167,8 @@ int create_shared_object(int32 ownerID, char *shareName, uint32 size, uint8 isWr
 			{
 				unmap_frame(myenv->env_page_directory, k);
 			}
+			kfree(share);
+			kfree(share->framesStorage);
 			return E_NO_SHARE;
 		}
 
@@ -312,8 +316,10 @@ int delete_shared_object(int32 sharedObjectID, void *startVA)
 			}
 			if (c == 0)
 			{
-				del_page_table(myenv->env_page_directory, va);
-				pd_clear_page_dir_entry(myenv->env_page_directory, va);
+				uint32 pde_index = PDX(va);
+				uint32 va_base = pde_index << PDXSHIFT;
+				del_page_table(myenv->env_page_directory, va_base);
+				pd_clear_page_dir_entry(myenv->env_page_directory, va_base);
 			}
 		}
 		va += PAGE_SIZE;
