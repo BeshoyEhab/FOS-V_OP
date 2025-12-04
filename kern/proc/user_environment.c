@@ -491,22 +491,65 @@ void env_free(struct Env *e)
 	// TODO: [PROJECT'25.BONUS#4] EXIT #1 & #2 - env_free
 	// Your code is here
 	// Comment the following line
-	panic("env_free() is not implemented yet...!!");
+	// panic("env_free() is not implemented yet...!!");
 
 	// [1] [NOT REQUIRED] [If BUFFERING is Enabled] Un-buffer any BUFFERED page belong to this environment from the free/modified lists
 	// [2] Free the pages in the PAGE working set from the main memory
 	// [3] free the PAGE working set itself from the main memory
 	// [4] free the USER HEAP block allocator [if exists]
+	
 	// [5] Free Shared variables [if any]
+	struct Share *share_itter = NULL;
+	bool wasHeld = holding_kspinlock(&(AllShares.shareslock));
+	if (!wasHeld)
+	{
+		acquire_kspinlock(&(AllShares.shareslock));
+	}
+	{
+		LIST_FOREACH(share_itter, &AllShares.shares_list)
+		{
+			if (share_itter->ownerID == e->env_id)
+			{
+				kfree(share_itter);
+				kfree(share_itter->framesStorage);
+				LIST_REMOVE(&(AllShares.shares_list), share_itter);
+			}
+		}
+	}
+	if (!wasHeld)
+	{
+		release_kspinlock(&(AllShares.shareslock));
+	}
 	// [6] Free Semaphores [if any]
 	// [7] Free all TABLES from the main memory
+	for (int i = 0; i < 1024; i++)
+	{
+		if (e->env_page_directory[i] & PERM_PRESENT)
+		{
+			uint32 va = (uint32)i << 22;
+			uint32 *ptr_p_t = NULL;
+			get_page_table(e->env_page_directory, va, &ptr_p_t);
+			if (ptr_p_t != NULL)
+			{
+				for (int j = 0; j < 1024; j++)
+				{
+					uint32 vaa = va + ((uint32)j << 12);
+					unmap_frame(e->env_page_directory, vaa);
+				}
+				del_page_table(e->env_page_directory, va);
+				pd_clear_page_dir_entry(e->env_page_directory, va);
+			}
+		}
+	}
+
 	// [8] free the page DIRECTORY from the main memory
+	kfree(e->env_page_directory);
 	// [9] remove this program from the page file
 	/*(ALREADY DONE for you)*/
-	pf_free_env(e); /*(ALREADY DONE for you)*/ // (removes all of the program pages from the page file)
-	/*========================*/
-	// [10] free the environment (return it back to the free environment list)
-	/*(ALREADY DONE for you)*/
+	pf_free_env(e); /*(ALREADY DONE for you)*/		// (removes all of the program pages from the page file)
+													/*========================*/
+													// [10] free the environment (return it back to the free environment list)
+													/*(ALREADY DONE for you)*/
 	free_environment(e); /*(ALREADY DONE for you)*/ // (frees the environment (returns it back to the free environment list))
 													/*========================*/
 }

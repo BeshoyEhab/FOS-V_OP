@@ -569,5 +569,92 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	// TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - krealloc
 	// Your code is here
 	// Comment the following line
-	panic("krealloc() is not implemented yet...!!");
+	// panic("krealloc() is not implemented yet...!!");
+	struct kheapPageSegment *seg = find_page_segment(virtual_address);
+	struct kheapPageSegment *seg_itt = NULL;
+	uint32 new_needed_count = (ROUNDUP(new_size, PAGE_SIZE) / PAGE_SIZE) - seg->pageCount;
+	if (new_size > seg->pageCount * PAGE_SIZE && virtual_address >= KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE)
+	{
+		LIST_FOREACH(seg_itt, &free_pages_segments)
+		{
+			if (seg_itt->startPage_va == virtual_address + seg->pageCount * PAGE_SIZE)
+			{
+				if (seg_itt->pageCount >= new_needed_count)
+				{
+					seg_itt->pageCount -= new_needed_count;
+					seg_itt->startPage_va += new_needed_count * PAGE_SIZE;
+					unmap_frame(ptr_page_directory, virtual_address + (seg->pageCount - 1) * PAGE_SIZE);
+					for (uint32 i = virtual_address + (seg->pageCount - 1) * PAGE_SIZE; i < virtual_address + ROUNDUP(new_size, PAGE_SIZE); i += PAGE_SIZE)
+					{
+						allocate_page_to_frame(i, PTEs_KERNEL);
+					}
+					seg->pageCount = ROUNDUP(new_size, PAGE_SIZE) / PAGE_SIZE;
+					return virtual_address;
+				}
+			}
+		}
+		uint32 new = kmalloc(new_size);
+		if (!new)
+		{
+			return new;
+		}
+		kfree(virtual_address);
+		return new;
+	}
+	else if (new_size < seg->pageCount * PAGE_SIZE && virtual_address >= KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE && new_size > 2048)
+	{
+		for (uint32 i = virtual_address + ROUNDUP(new_size, PAGE_SIZE); i < virtual_address + seg->pageCount * PAGE_SIZE; i += PAGE_SIZE)
+		{
+			unmap_frame(ptr_page_directory, i);
+		}
+		if (new_needed_count != 0)
+		{
+			struct kheapPageSegment *new_free_seg;
+			new_free_seg->pageCount = -new_needed_count;
+			new_free_seg->startPage_va = ROUNDUP(virtual_address + new_size, PAGE_SIZE);
+			LIST_INSERT_HEAD(&free_pages_segments, new_free_seg);
+			merge_free_segments(new_free_seg);
+			update_break_after_free();
+		}
+		return virtual_address;
+	}
+	if (virtual_address < KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE && new_size <= 2048)
+	{
+		uint32 block = alloc_block(new_size);
+		if (!block)
+		{
+			return block;
+		}
+		free_block(virtual_address);
+		return block;
+	}
+	if (virtual_address < KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE && new_size > 2048)
+	{
+		uint32 s = kmalloc(new_size);
+		if (!s)
+		{
+			return s;
+		}
+		free_block(virtual_address);
+		return s;
+	}
+	if (virtual_address >= KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE && new_size <= 2048)
+	{
+		uint32 block = alloc_block(new_size);
+		if (!block)
+		{
+			return block;
+		}
+		kfree(virtual_address);
+		return block;
+	}
+
+	if (virtual_address == NULL)
+	{
+		kmalloc(new_size);
+	}
+	if (new_size == 0)
+	{
+		kfree(virtual_address);
+	}
 }
