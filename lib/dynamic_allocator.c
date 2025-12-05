@@ -339,8 +339,6 @@ void free_block(void *va)
 //============================== BONUS FUNCTIONS ===================================//
 //==================================================================================//
 
-// Global vars for it at top
-
 //===========================
 // [1] REALLOCATE BLOCK:
 //===========================
@@ -348,6 +346,35 @@ void *realloc_block(void *va, uint32 new_size)
 {
 	// TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - realloc_block
 	// Your code is here
+	
+
+	uint32 old_size = get_block_size(va);
+	
+	void *new_va = alloc_block(new_size);
+	
+	if (new_va == NULL)
+	{
+		if (!is_queue_empty())
+		{
+			int last_idx = (queue_tail - 1 + ALLOC_QUEUE_SIZE) % ALLOC_QUEUE_SIZE;
+			if (allocationQueue[last_idx].size == new_size || 
+			    allocationQueue[last_idx].size == DYN_ALLOC_MIN_BLOCK_SIZE)
+			{
+				queue_tail = last_idx;
+				queue_count--;
+			}
+		}
+		return NULL;
+	}
+	
+	uint32 copy_size = (old_size < new_size) ? old_size : new_size;
+	
+	memcpy(new_va, va, copy_size);
+	
+	free_block(va);
+	
+	return new_va;
+	
 	// Comment the following line
-	panic("realloc_block() Not implemented yet");
+	// panic("realloc_block() Not implemented yet");
 }
