@@ -5,17 +5,65 @@ void bst_init(struct BST *tree) {
     tree->root = NULL;
 }
 
+static int height(struct Node *node) {
+    if (node == NULL) return 0;
+    return node->height;
+}
+
+static int max(int a, int b) {
+    return (a > b) ? a : b;
+}
+
+static int get_balance(struct Node *node) {
+    if (node == NULL) return 0;
+    return height(node->left) - height(node->right);
+}
+
 static struct Node* create_node(int key) {
     struct Node *node = (struct Node*)malloc(sizeof(struct Node));
     if (node) {
         node->key = key;
+        node->height = 1;
         node->left = NULL;
         node->right = NULL;
     }
     return node;
 }
 
+// Right rotation
+static struct Node* rotate_right(struct Node *y) {
+    struct Node *x = y->left;
+    struct Node *T2 = x->right;
+
+    // Perform rotation
+    x->right = y;
+    y->left = T2;
+
+    // Update heights
+    y->height = max(height(y->left), height(y->right)) + 1;
+    x->height = max(height(x->left), height(x->right)) + 1;
+
+    return x;
+}
+
+// Left rotation
+static struct Node* rotate_left(struct Node *x) {
+    struct Node *y = x->right;
+    struct Node *T2 = y->left;
+
+    // Perform rotation
+    y->left = x;
+    x->right = T2;
+
+    // Update heights
+    x->height = max(height(x->left), height(x->right)) + 1;
+    y->height = max(height(y->left), height(y->right)) + 1;
+
+    return y;
+}
+
 static struct Node* insert_node(struct Node *node, int key) {
+    // Standard BST insertion
     if (node == NULL) {
         return create_node(key);
     }
@@ -23,7 +71,38 @@ static struct Node* insert_node(struct Node *node, int key) {
         node->left = insert_node(node->left, key);
     } else if (key > node->key) {
         node->right = insert_node(node->right, key);
+    } else {
+        return node; // Duplicate keys not allowed
     }
+
+    // Update height of this ancestor node
+    node->height = 1 + max(height(node->left), height(node->right));
+
+    // Get balance factor to check if this node became unbalanced
+    int balance = get_balance(node);
+
+    // Left Left Case
+    if (balance > 1 && key < node->left->key) {
+        return rotate_right(node);
+    }
+
+    // Right Right Case
+    if (balance < -1 && key > node->right->key) {
+        return rotate_left(node);
+    }
+
+    // Left Right Case
+    if (balance > 1 && key > node->left->key) {
+        node->left = rotate_left(node->left);
+        return rotate_right(node);
+    }
+
+    // Right Left Case
+    if (balance < -1 && key < node->right->key) {
+        node->right = rotate_right(node->right);
+        return rotate_left(node);
+    }
+
     return node;
 }
 
@@ -38,31 +117,68 @@ static struct Node* find_min_node(struct Node *node) {
     return current;
 }
 
-static struct Node* delete_node(struct Node *node, int key) {
-    if (node == NULL) return node;
+static struct Node* delete_node(struct Node *root, int key) {
+    // Standard BST delete
+    if (root == NULL) return root;
 
-    if (key < node->key) {
-        node->left = delete_node(node->left, key);
-    } else if (key > node->key) {
-        node->right = delete_node(node->right, key);
+    if (key < root->key) {
+        root->left = delete_node(root->left, key);
+    } else if (key > root->key) {
+        root->right = delete_node(root->right, key);
     } else {
-        if (node->left == NULL) {
-            struct Node *temp = node->right;
-            free(node);
-            return temp;
-        } else if (node->right == NULL) {
-            struct Node *temp = node->left;
-            free(node);
-            return temp;
+        // Node with only one child or no child
+        if (root->left == NULL || root->right == NULL) {
+            struct Node *temp = root->left ? root->left : root->right;
+
+            if (temp == NULL) {
+                // No child case
+                temp = root;
+                root = NULL;
+            } else {
+                // One child case
+                *root = *temp; // Copy contents
+            }
+            free(temp);
+        } else {
+            // Node with two children
+            struct Node *temp = find_min_node(root->right);
+            root->key = temp->key;
+            root->right = delete_node(root->right, temp->key);
         }
-
-        struct Node *temp = find_min_node(node->right);
-        node->key = temp->key;
-
-        // Delete the inorder successor
-        node->right = delete_node(node->right, temp->key);
     }
-    return node;
+
+    // If the tree had only one node
+    if (root == NULL) return root;
+
+    // Update height
+    root->height = 1 + max(height(root->left), height(root->right));
+
+    // Get balance factor
+    int balance = get_balance(root);
+
+    // Left Left Case
+    if (balance > 1 && get_balance(root->left) >= 0) {
+        return rotate_right(root);
+    }
+
+    // Left Right Case
+    if (balance > 1 && get_balance(root->left) < 0) {
+        root->left = rotate_left(root->left);
+        return rotate_right(root);
+    }
+
+    // Right Right Case
+    if (balance < -1 && get_balance(root->right) <= 0) {
+        return rotate_left(root);
+    }
+
+    // Right Left Case
+    if (balance < -1 && get_balance(root->right) > 0) {
+        root->right = rotate_right(root->right);
+        return rotate_left(root);
+    }
+
+    return root;
 }
 
 void bst_remove(struct BST *tree, int key) {
