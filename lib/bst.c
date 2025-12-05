@@ -32,10 +32,45 @@ static struct Node *create_node(uint32 key)
     {
         node->key = key;
         node->height = 1;
+        node->height = 1;
         node->left = NULL;
         node->right = NULL;
     }
     return node;
+}
+
+// Right rotation
+static struct Node *rotate_right(struct Node *y)
+{
+    struct Node *x = y->left;
+    struct Node *T2 = x->right;
+
+    // Perform rotation
+    x->right = y;
+    y->left = T2;
+
+    // Update heights
+    y->height = max(height(y->left), height(y->right)) + 1;
+    x->height = max(height(x->left), height(x->right)) + 1;
+
+    return x;
+}
+
+// Left rotation
+static struct Node *rotate_left(struct Node *x)
+{
+    struct Node *y = x->right;
+    struct Node *T2 = y->left;
+
+    // Perform rotation
+    y->left = x;
+    x->right = T2;
+
+    // Update heights
+    x->height = max(height(x->left), height(x->right)) + 1;
+    y->height = max(height(y->left), height(y->right)) + 1;
+
+    return y;
 }
 
 // Right rotation
@@ -220,6 +255,8 @@ static struct Node *delete_node(struct Node *root, uint32 key)
     }
 
     return root;
+
+    return root;
 }
 
 void bst_remove(struct BST *tree, uint32 key)
@@ -266,19 +303,26 @@ int bst_find_max_lt_value(struct BST *tree, uint32 key)
     struct Node *current = tree->root;
     struct Node *candidate = NULL;
 
-    while (current != NULL) {
-        if (current->key == key) {
+    while (current != NULL)
+    {
+        if (current->key == key)
+        {
             // Node found. If it has a left subtree, max of that is the predecessor
-            if (current->left != NULL) {
+            if (current->left != NULL)
+            {
                 current = current->left;
                 while (current->right != NULL)
                     current = current->right;
                 return current->key;
             }
-             break;
-        } else if (key < current->key) {
+            break;
+        }
+        else if (key < current->key)
+        {
             current = current->left;
-        } else {
+        }
+        else
+        {
             // Going right: current node is smaller than key, so it's a candidate
             candidate = current;
             current = current->right;

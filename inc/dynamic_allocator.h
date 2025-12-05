@@ -30,7 +30,20 @@ LIST_HEAD(PageInfoElement_List, PageInfoElement);
 struct PageInfoElement_List freePagesList ;
 struct PageInfoElement pageBlockInfoArr[DYN_ALLOC_MAX_SIZE/PAGE_SIZE];
 
-//[3] Limits (to be set in initialize_dynamic_allocator())
+//[3] Allocation Queue for deferred allocations
+#define ALLOC_QUEUE_SIZE 128
+
+struct AllocationRequest
+{
+	uint32 size;
+};
+
+struct AllocationRequest allocationQueue[ALLOC_QUEUE_SIZE];
+int queue_head;
+int queue_tail;
+int queue_count;
+
+//[4] Limits (to be set in initialize_dynamic_allocator())
 uint32 dynAllocStart;
 uint32 dynAllocEnd;
 
