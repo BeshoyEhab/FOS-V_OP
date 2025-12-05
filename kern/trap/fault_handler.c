@@ -196,12 +196,13 @@ void fault_handler(struct Trapframe *tf)
 	{
 		if (userTrap)
 		{
-			if (fault_va >= USER_TOP) { 
-        if (fault_va >= USER_LIMIT || (fault_va < USER_LIMIT && (tf->tf_err & FEC_WR)))
-			  {
-				  env_exit();
-			  }
-      }
+			if (fault_va >= USER_TOP)
+			{
+				if (fault_va >= USER_LIMIT || (fault_va < USER_LIMIT && (tf->tf_err & FEC_WR)))
+				{
+					env_exit();
+				}
+			}
 
 			int perm = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
 
@@ -519,7 +520,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 			struct WorkingSetElement *last_element = env_page_ws_list_create_element(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 
-			// Insert BEFORE page_last_WS_element (clock hand) to protect new pages
 			if (faulted_env->page_last_WS_element != NULL)
 			{
 				LIST_INSERT_BEFORE(&(faulted_env->page_WS_list), faulted_env->page_last_WS_element, last_element);
@@ -529,7 +529,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), last_element);
 			}
 
-			// Only set page_last_WS_element on the FIRST fill (from empty to full)
 			if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size && faulted_env->page_last_WS_element == NULL)
 			{
 				faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
