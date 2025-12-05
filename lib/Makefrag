@@ -13,7 +13,8 @@ LIB_SRCFILES :=		lib/console.c \
 			lib/dynamic_allocator.c \
 			lib/semaphore.c \
 			lib/concurrency.c \
-			lib/uspinlock.c
+			lib/uspinlock.c \
+			lib/bst.c
 
 
 
