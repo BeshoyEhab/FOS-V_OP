@@ -495,9 +495,16 @@ void env_free(struct Env *e)
 
 	// [1] [NOT REQUIRED] [If BUFFERING is Enabled] Un-buffer any BUFFERED page belong to this environment from the free/modified lists
 	// [2] Free the pages in the PAGE working set from the main memory
+	struct WorkingSetElement *element = NULL;
+	LIST_FOREACH(element, &e->page_WS_list)
+	{
+		kfree(element->virtual_address);
+	}
 	// [3] free the PAGE working set itself from the main memory
+	kfree(&e->page_WS_list);
+
 	// [4] free the USER HEAP block allocator [if exists]
-	
+
 	// [5] Free Shared variables [if any]
 	struct Share *share_itter = NULL;
 	bool wasHeld = holding_kspinlock(&(AllShares.shareslock));
@@ -546,10 +553,10 @@ void env_free(struct Env *e)
 	kfree(e->env_page_directory);
 	// [9] remove this program from the page file
 	/*(ALREADY DONE for you)*/
-	pf_free_env(e); /*(ALREADY DONE for you)*/		// (removes all of the program pages from the page file)
-													/*========================*/
-													// [10] free the environment (return it back to the free environment list)
-													/*(ALREADY DONE for you)*/
+	pf_free_env(e); /*(ALREADY DONE for you)*/ // (removes all of the program pages from the page file)
+											   /*========================*/
+	// [10] free the environment (return it back to the free environment list)
+	/*(ALREADY DONE for you)*/
 	free_environment(e); /*(ALREADY DONE for you)*/ // (frees the environment (returns it back to the free environment list))
 													/*========================*/
 }
