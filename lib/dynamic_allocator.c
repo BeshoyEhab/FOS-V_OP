@@ -74,6 +74,11 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 		LIST_INSERT_TAIL(&freePagesList, &pageBlockInfoArr[i]);
 	}
 
+	// Initialize allocation queue
+	queue_head = 0;
+	queue_tail = 0;
+	queue_count = 0;
+
 	// Comment the following line
 	// panic("initialize_dynamic_allocator() Not implemented yet");
 }
@@ -95,6 +100,45 @@ __inline__ uint32 get_block_size(void *va)
 
 	// Comment the following line
 	// panic("get_block_size() Not implemented yet");
+}
+
+//===========================
+// QUEUE HELPER FUNCTIONS:
+//===========================
+static inline bool is_queue_empty()
+{
+	return queue_count == 0;
+}
+
+static inline bool is_queue_full()
+{
+	return queue_count >= ALLOC_QUEUE_SIZE;
+}
+
+static void enqueue_allocation(uint32 size)
+{
+	if (is_queue_full())
+	{
+		panic("alloc_block: allocation queue is full");
+		return;
+	}
+	
+	allocationQueue[queue_tail].size = size;
+	queue_tail = (queue_tail + 1) % ALLOC_QUEUE_SIZE;
+	queue_count++;
+}
+
+static uint32 dequeue_allocation()
+{
+	if (is_queue_empty())
+	{
+		return 0;
+	}
+	
+	uint32 size = allocationQueue[queue_head].size;
+	queue_head = (queue_head + 1) % ALLOC_QUEUE_SIZE;
+	queue_count--;
+	return size;
 }
 
 //===========================
@@ -186,7 +230,9 @@ void *alloc_block(uint32 size)
 		}
 		else
 		{
-			panic("alloc_block: no block available at any size");
+			// Instead of panicking, enqueue the allocation request
+			enqueue_allocation(size);
+			return NULL;
 		}
 	}
 
@@ -260,6 +306,29 @@ void free_block(void *va)
 		PageInfo->block_size = 0;
 		PageInfo->num_of_free_blocks = 0;
 		LIST_INSERT_HEAD(&freePagesList, PageInfo);
+	}
+
+	// Process queued allocation requests (if not already processing)
+	static bool processing_queue = 0;
+	if (!processing_queue && !is_queue_empty())
+	{
+		processing_queue = 1;
+		
+		// Try to allocate for one queued request
+		uint32 queued_size = dequeue_allocation();
+		if (queued_size > 0)
+		{
+			void *allocated = alloc_block(queued_size);
+			// If allocation still fails, re-enqueue it
+			if (allocated == NULL)
+			{
+				// Put it back at the front (will become tail after rotation)
+				queue_head = (queue_head - 1 + ALLOC_QUEUE_SIZE) % ALLOC_QUEUE_SIZE;
+				queue_count++;
+			}
+		}
+		
+		processing_queue = 0;
 	}
 
 	// Comment the following line
