@@ -6,14 +6,17 @@
 
 //==================================================================================//
 //==================================================================================//
-//========================== EFFICIENT KERNEL HEAP =================================//
-//================= TIME COMPLEXITY IN WORST CASE ~ O(log(N)) ======================//
-//=================== TIME COMPLEXITY IN AVERAGE CASE ~ O(1) =======================//
+//========================= NOT EFFICIENT KERNEL HEAP ==============================//
+//========================== TIME COMPLEXITY ~ O(N) ================================//
 //==================================================================================//
 //==================================================================================//
 
 
-//THE INEFFICIENT VERSION IS IN kheap_not_eff.c AND kheap_not_eff.h
+
+
+//THE EFFICIENT VERSION IS IN kheap.c AND kheap.h
+
+
 
 
 
@@ -30,8 +33,6 @@
 
 #include <inc/queue.h>
 #include <inc/types.h>
-#include <inc/bst.h>
-#include <inc/hash_table.h>
 
 /*2017*/
 // Values for user heap placement strategy
@@ -61,12 +62,19 @@ void *krealloc(void *virtual_address, unsigned int new_size);
 unsigned int kheap_virtual_address(unsigned int physical_address);
 unsigned int kheap_physical_address(unsigned int virtual_address);
 
-struct BST free_size_tree;
-struct BST free_address_tree;
-struct HashTable free_ht;
-struct HashTable reverse_free_ht;
-struct HashTable allocated_ht;
+LIST_HEAD(free_pages_segments, kheapPageSegment);
+LIST_HEAD(allocated_pages_segments, kheapPageSegment);
 
+extern struct free_pages_segments free_pages_segments;
+extern struct allocated_pages_segments allocated_pages_segments;
+
+struct kheapPageSegment
+{
+    LIST_ENTRY(kheapPageSegment)
+    prev_next_info;
+    int pageCount;
+    uint32 startPage_va;
+};
 
 int numOfKheapVACalls;
-#endif
+#endif // FOS_KERN_KHEAP_H_

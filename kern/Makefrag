@@ -64,6 +64,8 @@ KERN_SRCFILES :=	kern/entry.S \
 			lib/string.c \
 			lib/disk.c \
 			lib/dynamic_allocator.c \
+			lib/bst.c \
+			lib/hash_table.c \
 
 
 
