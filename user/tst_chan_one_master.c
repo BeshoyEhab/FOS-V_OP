@@ -10,7 +10,7 @@ _main(void)
 	cprintf_colored(TEXT_yellow,"==============================================\n");
 
 	int envID = sys_getenvid();
-	char slavesCnt[10];
+	char slavesCnt[BUFLEN];
 	readline("Enter the number of Slave Programs: ", slavesCnt);
 	int numOfSlaves = strtol(slavesCnt, NULL, 10);
 
