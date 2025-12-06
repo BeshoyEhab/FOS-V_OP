@@ -30,7 +30,7 @@ int	ide_write(uint32 secno, const void *src, uint32 nsecs);
 #define INT_SLEEP 		2
 #define INT_SEMAPHORE 	3
 
-#define DISK_IO_METHOD PROGRAMMED_IO 	//Specify the method of handling the block/release on DISK
+#define DISK_IO_METHOD INT_SLEEP 	//Specify the method of handling the block/release on DISK
 
 #if DISK_IO_METHOD == INT_SLEEP
 struct Channel DISKchannel;				//channel of waiting for DISK
