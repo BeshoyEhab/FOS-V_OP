@@ -606,7 +606,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 
 				if (LIST_SIZE(&(faulted_env->page_WS_list)) < faulted_env->page_WS_max_size)
-
+				{
 					uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 					struct FrameInfo *new_frame;
@@ -639,80 +639,82 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 					return; 
 				}
-
-				elem = LIST_FIRST(&(faulted_env->page_WS_list));
-				uint32 min_time = 0xFFFFFFFF;
-
-				while (elem != NULL)
-				{
-					if (elem->time_stamp < min_time)
-					{
-						min_time = elem->time_stamp;
-						victim = elem;
-					}
-					elem = LIST_NEXT(elem);
-				}
-
-				if (victim == NULL)
-				{
-					/* Should not happen if WS is full — fallback: pick first element */
-					victim = LIST_FIRST(&(faulted_env->page_WS_list));
-					if (victim == NULL)
-					{
-						panic("LRU replacement: no victim found and WS is empty");
-					}
-				}
-
-				struct WorkingSetElement *next_victim = LIST_NEXT(victim);
-				uint32 victim_va = victim->virtual_address;
-
-				uint32 *ptr_page_table;
-				struct FrameInfo *victim_frame = get_frame_info(faulted_env->env_page_directory, victim_va, &ptr_page_table);
-				int perms = pt_get_page_permissions(faulted_env->env_page_directory, victim_va);
-
-				if (perms & PERM_MODIFIED)
-				{
-					pf_update_env_page(faulted_env, victim_va, victim_frame);
-				}
-
-				unmap_frame(faulted_env->env_page_directory, victim_va);
-				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
-				kfree(victim);
-
-				uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
-
-				struct FrameInfo *new_frame;
-				if (allocate_frame(&new_frame) != 0)
-				{
-					panic("LRU replacement: allocate_frame failed (after victim unmap)");
-				}
-
-				map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
-						  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
-
-				int ret = pf_read_env_page(faulted_env, fault_vva);
-				if (ret == E_PAGE_NOT_EXIST_IN_PF)
-				{
-					if (!((fault_vva >= USER_HEAP_START && fault_vva < USER_HEAP_MAX) ||
-						  (fault_vva >= USTACKBOTTOM && fault_vva < USTACKTOP)))
-					{
-						unmap_frame(faulted_env->env_page_directory, fault_vva);
-						env_exit();
-					}
-				}
-
-				struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, fault_vva);
-				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
-
-				if (next_victim != NULL)
-				{
-					faulted_env->page_last_WS_element = next_victim;
-				}
 				else
 				{
-					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
-				}
 
+					elem = LIST_FIRST(&(faulted_env->page_WS_list));
+					uint32 min_time = 0xFFFFFFFF;
+
+					while (elem != NULL)
+					{
+						if (elem->time_stamp < min_time)
+						{
+							min_time = elem->time_stamp;
+							victim = elem;
+						}
+						elem = LIST_NEXT(elem);
+					}
+
+					if (victim == NULL)
+					{
+						/* Should not happen if WS is full — fallback: pick first element */
+						victim = LIST_FIRST(&(faulted_env->page_WS_list));
+						if (victim == NULL)
+						{
+							panic("LRU replacement: no victim found and WS is empty");
+						}
+					}
+
+					struct WorkingSetElement *next_victim = LIST_NEXT(victim);
+					uint32 victim_va = victim->virtual_address;
+
+					uint32 *ptr_page_table;
+					struct FrameInfo *victim_frame = get_frame_info(faulted_env->env_page_directory, victim_va, &ptr_page_table);
+					int perms = pt_get_page_permissions(faulted_env->env_page_directory, victim_va);
+
+					if (perms & PERM_MODIFIED)
+					{
+						pf_update_env_page(faulted_env, victim_va, victim_frame);
+					}
+
+					unmap_frame(faulted_env->env_page_directory, victim_va);
+					LIST_REMOVE(&(faulted_env->page_WS_list), victim);
+					kfree(victim);
+
+					uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
+
+					struct FrameInfo *new_frame;
+					if (allocate_frame(&new_frame) != 0)
+					{
+						panic("LRU replacement: allocate_frame failed (after victim unmap)");
+					}
+
+					map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
+							  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
+
+				int ret = pf_read_env_page(faulted_env, fault_vva);
+					if (ret == E_PAGE_NOT_EXIST_IN_PF)
+					{
+						if (!((fault_vva >= USER_HEAP_START && fault_vva < USER_HEAP_MAX) ||
+							  (fault_vva >= USTACKBOTTOM && fault_vva < USTACKTOP)))
+						{
+							unmap_frame(faulted_env->env_page_directory, fault_vva);
+							env_exit();
+						}
+					}
+
+					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, fault_vva);
+					LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
+
+					if (next_victim != NULL)
+					{
+						faulted_env->page_last_WS_element = next_victim;
+					}
+					else
+					{
+						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+					}
+				}
 			}
 			else if (isPageReplacmentAlgorithmModifiedCLOCK())
 			{
@@ -835,6 +837,14 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 					// Allocate a new frame
 					struct FrameInfo *new_frame = NULL;
+					if (allocate_frame(&new_frame) != 0 || new_frame == NULL)
+					{
+						env_exit();
+					}
+
+					// Map the new frame at the fault address
+					map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
+							  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
 
 					int read_page = pf_read_env_page(faulted_env, fault_vva);
 					if (read_page == E_PAGE_NOT_EXIST_IN_PF)
