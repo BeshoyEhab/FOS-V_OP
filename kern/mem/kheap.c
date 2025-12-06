@@ -52,6 +52,25 @@ void kheap_init()
 	init_kspinlock(&kheap_page_lock, "kheap_page_lock");
 }
 
+//==============================================
+// [2] GET A PAGE FROM THE KERNEL FOR DA:
+//==============================================
+int get_page(void *va)
+{
+	int ret = alloc_page(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE), PERM_WRITEABLE, 1);
+	if (ret < 0)
+		panic("get_page() in kern: failed to allocate page from the kernel");
+	return 0;
+}
+
+//==============================================
+// [3] RETURN A PAGE FROM THE DA TO KERNEL:
+//==============================================
+void return_page(void *va)
+{
+	unmap_frame(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE));
+}
+
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
