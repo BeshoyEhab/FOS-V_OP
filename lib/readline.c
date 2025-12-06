@@ -19,7 +19,7 @@ void readline(const char *prompt, char* buf)
 	echoing = iscons(0);
 	
 	// Clear the buffer
-	memset(buf, 0, BUFLEN);
+	memset(buf, 0, 10);
 	
 	while (1) {
 		c = getchar();
@@ -27,7 +27,7 @@ void readline(const char *prompt, char* buf)
 			if (c != -E_EOF)
 				cprintf("read error: %e\n", c);
 			break;
-		} else if (c >= ' ' && c <= '~' && i < BUFLEN-1) {
+		} else if (c >= ' ' && c <= '~' && i < 10-1) {
 			// Printable character - insert at cursor position
 			if (cursor_pos < i) {
 				// Shift characters right to make room

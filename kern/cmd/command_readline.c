@@ -250,11 +250,29 @@ void command_prompt_readline(const char *prompt, char* buf) {
 			}
 		}
 		else if (c >= ' ' && i < BUFLEN - 1 && c != 229 && c != 228) {
-			if (echoing)
-				cputchar(c);
-			buf[i++] = c;
-			if (i > lastIndex)
-				lastIndex = i;
+			
+			// Shift characters right
+			if (i < lastIndex) {
+				memmove(&buf[i + 1], &buf[i], lastIndex - i);
+			}
+			
+			buf[i] = c;
+			lastIndex++;
+			buf[lastIndex] = 0;
+			
+			if (echoing) {
+				// Print current char and all subsequent chars
+				for (int j = i; j < lastIndex; j++)
+					cputchar(buf[j]);
+				
+				// Move cursor back to the position after the inserted character
+				// Current physical cursor pos is at lastIndex
+				// Target pos is i + 1
+				int chars_to_move_back = lastIndex - (i + 1);
+				for (int j = 0; j < chars_to_move_back; j++)
+					cputchar(228); 
+			}
+			i++;
 		} else if (c == '\b' && i > 0) {
 			if (echoing)
 				cputchar(c);
