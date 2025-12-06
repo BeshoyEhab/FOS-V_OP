@@ -167,3 +167,42 @@ memset(buf, 0, BUFLEN);  // ADDED: zero out garbage
 The entire problem boiled down to using **`\b` (destructive) instead of `KEY_LF` (non-destructive)** for cursor repositioning. I was literally printing the correct text and then immediately erasing it as I moved the cursor back!
 
 By switching to `cputchar(228)` for cursor movement in the redraw logic, the text remains visible and the display matches the buffer perfectly.
+
+## Update: Insert Mode Implementation
+
+I implemented insert mode to prevent characters from being overwritten when typing in the middle of a command.
+
+### The Problem
+
+Previously, typing in the middle of a string would overwrite the existing character at that position instead of inserting.
+
+### The Change
+
+Modified the typing logic to shift existing text to the right before inserting the new character.
+
+```c
+else if (c >= ' ' && i < BUFLEN - 1 && c != 229 && c != 228) {
+
+    // Shift characters right if we are in the middle of the string
+    if (i < lastIndex) {
+        memmove(&buf[i + 1], &buf[i], lastIndex - i);
+    }
+
+    buf[i] = c;
+    lastIndex++;      // Increment length
+    buf[lastIndex] = 0; // Null-terminate
+
+    if (echoing) {
+        // Print current char and all subsequent chars to update screen
+        for (int j = i; j < lastIndex; j++)
+            cputchar(buf[j]);
+
+        // Move cursor back to the position AFTER the inserted character
+        // visual cursor is at invalid position (end of string), move it back
+        int chars_to_move_back = lastIndex - (i + 1);
+        for (int j = 0; j < chars_to_move_back; j++)
+            cputchar(228);
+    }
+    i++; // Move logical cursor
+}
+```
