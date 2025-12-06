@@ -413,11 +413,11 @@ void update_WS_time_stamps()
 	for (int i = 0; i < NENV; ++i) {
         struct Env *e = &envs[i];
 
-        /* Skip empty / free environments */
+        // Skip empty / free environments
         if (e->env_status == ENV_FREE)
             continue;
 
-        /* If the env has no working-set list, skip quickly */
+        // If the env has no working-set list, skip quickly
         if (LIST_EMPTY(&(e->page_WS_list)))
             continue;
 
@@ -427,10 +427,10 @@ void update_WS_time_stamps()
             int perms = pt_get_page_permissions(e->env_page_directory, va);
             int used = (perms & PERM_USED) ? 1 : 0;
 
-            /* Age the timestamp and set MSB to current used bit */
+
             elem->time_stamp = (elem->time_stamp >> 1) | ((uint32)used << 31);
 
-            /* Clear the hardware-used bit so next tick detects new accesses */
+
             if (used) {
                 pt_set_page_permissions(e->env_page_directory, va, 0, PERM_USED);
             }
