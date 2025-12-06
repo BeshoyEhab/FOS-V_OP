@@ -1,5 +1,7 @@
+
 #include <inc/bst.h>
 #include <inc/lib.h>
+// #include <kern/mem/kheap.h>
 
 void bst_init(struct BST *tree)
 {
@@ -25,52 +27,25 @@ static int get_balance(struct Node *node)
     return height(node->left) - height(node->right);
 }
 
+#ifdef FOS_KERNEL
+#include <kern/mem/kheap.h>
+#endif
+
 static struct Node *create_node(uint32 key)
 {
+#ifdef FOS_KERNEL
     struct Node *node = (struct Node *)kmalloc(sizeof(struct Node));
+#else
+    struct Node *node = (struct Node *)malloc(sizeof(struct Node));
+#endif
     if (node)
     {
         node->key = key;
-        node->height = 1;
         node->height = 1;
         node->left = NULL;
         node->right = NULL;
     }
     return node;
-}
-
-// Right rotation
-static struct Node *rotate_right(struct Node *y)
-{
-    struct Node *x = y->left;
-    struct Node *T2 = x->right;
-
-    // Perform rotation
-    x->right = y;
-    y->left = T2;
-
-    // Update heights
-    y->height = max(height(y->left), height(y->right)) + 1;
-    x->height = max(height(x->left), height(x->right)) + 1;
-
-    return x;
-}
-
-// Left rotation
-static struct Node *rotate_left(struct Node *x)
-{
-    struct Node *y = x->right;
-    struct Node *T2 = y->left;
-
-    // Perform rotation
-    y->left = x;
-    x->right = T2;
-
-    // Update heights
-    x->height = max(height(x->left), height(x->right)) + 1;
-    y->height = max(height(y->left), height(y->right)) + 1;
-
-    return y;
 }
 
 // Right rotation
@@ -207,7 +182,11 @@ static struct Node *delete_node(struct Node *root, uint32 key)
                 // One child case
                 *root = *temp; // Copy contents
             }
+#ifdef FOS_KERNEL
             kfree(temp);
+#else
+            free(temp);
+#endif
         }
         else
         {
@@ -253,8 +232,6 @@ static struct Node *delete_node(struct Node *root, uint32 key)
         root->right = rotate_right(root->right);
         return rotate_left(root);
     }
-
-    return root;
 
     return root;
 }
