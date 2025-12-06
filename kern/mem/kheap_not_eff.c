@@ -1,8 +1,5 @@
 
 
-
-
-
 //==================================================================================//
 //==================================================================================//
 //========================= NOT EFFICIENT KERNEL HEAP ==============================//
@@ -10,18 +7,7 @@
 //==================================================================================//
 //==================================================================================//
 
-
-
-
-//THE EFFICIENT VERSION IS IN kheap.c AND kheap.h
-
-
-
-
-
-
-
-
+// THE EFFICIENT VERSION IS IN kheap.c AND kheap.h
 
 #include "kheap_not_eff.h"
 
@@ -111,7 +97,6 @@ void return_page(void *va)
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
 
-//* i DO NOT know what is this function DO
 static struct kheapPageSegment *allocate_segment_struct(void)
 {
     for (int i = 0; i < MAX_SEGMENTS; ++i)
@@ -129,7 +114,6 @@ static struct kheapPageSegment *allocate_segment_struct(void)
     return NULL;
 }
 
-//* i DO NOT know what is this function DO
 static void free_segment_struct(struct kheapPageSegment *seg)
 {
     if (seg == NULL)
@@ -146,7 +130,6 @@ static void free_segment_struct(struct kheapPageSegment *seg)
     seg->startPage_va = 0;
 }
 
-//* to allocate page to the physical frame
 int allocate_page_to_frame(uint32 va, uint32 perm)
 {
     uint32 *pageTable = NULL;
@@ -171,10 +154,9 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
         return -1;
     }
 
-    return 0; // in case of success
+    return 0;
 }
 
-//* Split a segment into two segments
 uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, uint32 *out_va)
 {
 
@@ -197,7 +179,6 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, ui
         int status = allocate_page_to_frame(va, PTEs_KERNEL);
         if (status == -1)
         {
-            // Unmap allocated frame in case of failure
             for (uint32 j = 0; j < i; j++)
             {
                 uint32 rva = new_segment->startPage_va + j * PAGE_SIZE;
@@ -209,16 +190,14 @@ uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, ui
     }
     LIST_INSERT_TAIL(&allocated_pages_segments, new_segment);
     *out_va = new_segment->startPage_va;
-    return 0; // success
+    return 0;
 }
 
-//* the strategy fo allocate Block of pages (Segments of pages)
 void *custom_fit(uint32 required_pages)
 {
     if (required_pages == 0)
         return NULL;
 
-    // means that no free segments and no enough space to break
     if (LIST_EMPTY(&free_pages_segments) && kheapPageAllocBreak + required_pages * PAGE_SIZE > KERNEL_HEAP_MAX)
     {
         return NULL;
@@ -279,7 +258,6 @@ void *custom_fit(uint32 required_pages)
 
         uint32 new_break = kheapPageAllocBreak + required_pages * PAGE_SIZE;
 
-        // Check for break overflow
         if (new_break < kheapPageAllocBreak || new_break > KERNEL_HEAP_MAX)
         {
             return NULL;
@@ -298,7 +276,7 @@ void *custom_fit(uint32 required_pages)
                 }
                 return NULL;
             }
-        } // FOR LOOP END
+        }
 
         struct kheapPageSegment *newseg = allocate_segment_struct();
         if (newseg == NULL)
@@ -335,8 +313,7 @@ void *kmalloc(unsigned int size)
         return NULL;
     if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
     {
-        // we need to make lock while allocation
-        bool block_lock_is_in_hold = holding_kspinlock(&kheap_block_lock); // that return 0 if if free
+        bool block_lock_is_in_hold = holding_kspinlock(&kheap_block_lock);
 
         if (!block_lock_is_in_hold)
             acquire_kspinlock(&kheap_block_lock);
@@ -363,11 +340,7 @@ void *kmalloc(unsigned int size)
         acquire_kspinlock(&kheap_page_lock);
     }
 
-    // Convert given size from bytes to pages
     uint32 required_pages = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
-    // struct kheapPagesBlock *block = NULL;
-
-    // TODO: int custom_fit(uint32 required_pages); , return the status 0 success , 1 fail , -1 panic
     void *result = custom_fit(required_pages);
 
     if (!is_holding_page_lock)

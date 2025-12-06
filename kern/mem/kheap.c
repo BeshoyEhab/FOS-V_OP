@@ -23,15 +23,10 @@
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
 #define PTEs_KERNEL (PERM_PRESENT | PERM_USED | PERM_WRITEABLE) // page table entries of the kernel
-// #define MAX_SEGMENTS 768										// 1048576									//(KERNEL_HEAP_MAX - (KERNEL_HEAP_START+dynAllocEnd+PAGE_SIZE)) / PAGE_SIZE)
 
 int allocate_page_to_frame(uint32 va, uint32 perm);
 void *custom_fit(uint32 required_pages);
-uint32 split_segment(struct kheapPageSegment *segment, uint32 required_pages, uint32 *out_va);
-void merge_free_segments(struct kheapPageSegment *segment);
-int update_break_after_free(void);
-struct kheapPageSegment *find_segment(uint32 va);
-
+//==================================================================================//
 struct kspinlock kheap_block_lock;
 struct kspinlock kheap_page_lock;
 
@@ -57,30 +52,10 @@ void kheap_init()
 	init_kspinlock(&kheap_page_lock, "kheap_page_lock");
 }
 
-//==============================================
-// [2] GET A PAGE FROM THE KERNEL FOR DA:
-//==============================================
-int get_page(void *va)
-{
-	int ret = alloc_page(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE), PERM_WRITEABLE, 1);
-	if (ret < 0)
-		panic("get_page() in kern: failed to allocate page from the kernel");
-	return 0;
-}
-
-//==============================================
-// [3] RETURN A PAGE FROM THE DA TO KERNEL:
-//==============================================
-void return_page(void *va)
-{
-	unmap_frame(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE));
-}
-
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
 
-//* to allocate page to the physical frame
 int allocate_page_to_frame(uint32 va, uint32 perm)
 {
 	uint32 *pageTable = NULL;
@@ -105,7 +80,7 @@ int allocate_page_to_frame(uint32 va, uint32 perm)
 		return -1;
 	}
 
-	return 0; // in case of success
+	return 0;
 }
 
 void *custom_fit(uint32 size)
@@ -176,13 +151,12 @@ void *custom_fit(uint32 size)
 		}
 		return address_key;
 	}
-	//* Break-update
+	//* Break-fit
 	if ((kheapPageAllocBreak + size) <= KERNEL_HEAP_MAX)
 	{
 
 		uint32 new_break = kheapPageAllocBreak + size;
 
-		// Check for break overflow
 		if (new_break < kheapPageAllocBreak || new_break > KERNEL_HEAP_MAX)
 		{
 			return NULL;
@@ -324,7 +298,6 @@ void kfree(void *virtual_address)
 		{
 			kheapPageAllocBreak -= size;
 
-			// Recursively absorb previous free segments if they touch the new break
 			while (1)
 			{
 				uint32 prev_va = (uint32)bst_find_max_lt_value(&free_address_tree, kheapPageAllocBreak);
@@ -336,7 +309,6 @@ void kfree(void *virtual_address)
 				{
 					kheapPageAllocBreak -= prev_size;
 
-					// Remove from free lists
 					bst_remove(&free_address_tree, prev_va);
 					hash_delete_key(&reverse_free_ht, prev_va);
 					hash_delete_value(&free_ht, prev_size, (void *)prev_va);
@@ -443,8 +415,6 @@ void kfree(void *virtual_address)
 			}
 		}
 
-		// merge_free_segments(segment);
-
 		if (!page_lock_held)
 			release_kspinlock(&kheap_page_lock);
 	}
@@ -506,5 +476,5 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	// Your code is here
 	// Comment the following line
 	panic("krealloc() is implemented in the second version of kheap 'kheap_not_eff.c'...!!");
-	//we can't implement this function agin because we don't have time
+	// we can't implement this function agin because we don't have time
 }

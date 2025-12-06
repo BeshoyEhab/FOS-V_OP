@@ -542,7 +542,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Clock Replacement
 				struct WorkingSetElement *victim = clearUsed(faulted_env);
 
-				// Get victim's frame info using get_frame_info (NOT get_page_table)
 				uint32 *victim_ptr_page_table = NULL;
 				struct FrameInfo *victim_frame_info = get_frame_info(faulted_env->env_page_directory, victim->virtual_address, &victim_ptr_page_table);
 
@@ -551,27 +550,22 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					env_exit();
 				}
 
-				// Check if victim is modified and write back to page file if needed
 				int victim_perms = pt_get_page_permissions(faulted_env->env_page_directory, victim->virtual_address);
 				if (victim_perms & PERM_MODIFIED)
 				{
 					pf_update_env_page(faulted_env, ROUNDDOWN(victim->virtual_address, PAGE_SIZE), victim_frame_info);
 				}
 
-				// Unmap victim frame
 				unmap_frame(faulted_env->env_page_directory, victim->virtual_address);
 
-				// Allocate new frame for the faulted page
 				struct FrameInfo *new_element_frame;
 				if (allocate_frame(&new_element_frame) != 0 || new_element_frame == NULL)
 				{
 					env_exit();
 				}
 
-				// Map the new frame at the fault address
 				map_frame(faulted_env->env_page_directory, new_element_frame, ROUNDDOWN(fault_va, PAGE_SIZE), PERM_WRITEABLE | PERM_USER | PERM_PRESENT | PERM_USED);
 
-				// Read the page content from disk
 				int read_result = pf_read_env_page(faulted_env, ROUNDDOWN(fault_va, PAGE_SIZE));
 				if (read_result == E_PAGE_NOT_EXIST_IN_PF)
 				{
@@ -583,10 +577,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					}
 				}
 
-				// Update the victim element's virtual address to point to the new page
 				victim->virtual_address = ROUNDDOWN(fault_va, PAGE_SIZE);
 
-				// Update page_last_WS_element to the next element after victim (circular)
 				struct WorkingSetElement *next_elem = LIST_NEXT(victim);
 				if (next_elem == NULL)
 				{
@@ -600,10 +592,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// Your code is here
 				// Comment the following line
 
-
 				struct WorkingSetElement *elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				struct WorkingSetElement *victim = NULL;
-
 
 				if (LIST_SIZE(&(faulted_env->page_WS_list)) < faulted_env->page_WS_max_size)
 				{
@@ -637,7 +627,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
 					}
 
-					return; 
+					return;
 				}
 				else
 				{
@@ -657,7 +647,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 					if (victim == NULL)
 					{
-						/* Should not happen if WS is full — fallback: pick first element */
 						victim = LIST_FIRST(&(faulted_env->page_WS_list));
 						if (victim == NULL)
 						{
@@ -692,7 +681,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
 							  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
 
-				int ret = pf_read_env_page(faulted_env, fault_vva);
+					int ret = pf_read_env_page(faulted_env, fault_vva);
 					if (ret == E_PAGE_NOT_EXIST_IN_PF)
 					{
 						if (!((fault_vva >= USER_HEAP_START && fault_vva < USER_HEAP_MAX) ||
@@ -732,10 +721,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				struct WorkingSetElement *victim = NULL;
 				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
 
-				
 				while (1)
 				{
-					// Trial 1: Search for (Used=0, Modified=0)
 					struct WorkingSetElement *start_elem = elem;
 
 					for (int i = 0; i < ws_size; i++)
@@ -743,7 +730,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						uint32 vva = ROUNDDOWN(elem->virtual_address, PAGE_SIZE);
 						int perms = pt_get_page_permissions(faulted_env->env_page_directory, vva);
 
-						// Skip if page is not present or page table doesn't exist
 						if (perms == -1 || !(perms & PERM_PRESENT))
 						{
 							elem = LIST_NEXT(elem);
@@ -758,9 +744,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						if (!used && !modified)
 						{
 							victim = elem;
-							break; //(0,0)
+							break;
 						}
-
 
 						elem = LIST_NEXT(elem);
 						if (!elem)
@@ -768,9 +753,8 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					}
 
 					if (victim)
-						break; 
+						break;
 
-					//trail 2
 					elem = start_elem; // Reset
 
 					for (int i = 0; i < ws_size; i++)
@@ -795,7 +779,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 							break; // Found (0,1)
 						}
 
-						// make used = 0
 						if (used)
 						{
 							pt_set_page_permissions(faulted_env->env_page_directory, vva, 0, PERM_USED);
@@ -807,7 +790,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					}
 
 					if (victim)
-						break; // Found in Trial 2
+						break;
 
 					elem = start_elem;
 				}
@@ -816,11 +799,9 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				{
 					uint32 victim_vva = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
 
-					// Print perms BEFORE doing anything
 					int vperms = pt_get_page_permissions(faulted_env->env_page_directory, victim_vva);
 					// cprintf("DEBUG: (before) victim_vva=%x perms=%x\n", victim_vva, vperms);
 
-					// get the frame info now
 					uint32 *ptr_page_table = NULL;
 					struct FrameInfo *victim_frame = get_frame_info(faulted_env->env_page_directory, victim_vva, &ptr_page_table);
 
@@ -830,19 +811,16 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						pf_update_env_page(faulted_env, victim_vva, victim_frame);
 					}
 
-					// unmap the victim mapping 
 					unmap_frame(faulted_env->env_page_directory, victim_vva);
 
 					uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
 
-					// Allocate a new frame
 					struct FrameInfo *new_frame = NULL;
 					if (allocate_frame(&new_frame) != 0 || new_frame == NULL)
 					{
 						env_exit();
 					}
 
-					// Map the new frame at the fault address
 					map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
 							  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
 
@@ -855,20 +833,15 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 							unmap_frame(faulted_env->env_page_directory, fault_vva);
 							env_exit();
 						}
-
 					}
 
-
 					victim->virtual_address = fault_vva;
-
 
 					struct WorkingSetElement *after = LIST_NEXT(victim);
 					if (!after)
 						after = LIST_FIRST(&(faulted_env->page_WS_list));
 					faulted_env->page_last_WS_element = after;
-
 				}
-
 			}
 		}
 	}
