@@ -600,35 +600,30 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// Your code is here
 				// Comment the following line
 
-				// LRU Aging Replacement (fault-time: only select victim, do placement/replacement)
+
 				struct WorkingSetElement *elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				struct WorkingSetElement *victim = NULL;
 
-				/* If there's still free space in WS, we don't evict — we do placement. */
+
 				if (LIST_SIZE(&(faulted_env->page_WS_list)) < faulted_env->page_WS_max_size)
-				{
-					/* Placement: allocate & map frame for fault_va and insert new WS element */
+
 					uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 					struct FrameInfo *new_frame;
 					if (allocate_frame(&new_frame) != 0)
 					{
-						// allocation failure handling (adapt to your kernel style)
 						panic("LRU replacement: allocate_frame failed");
 					}
 
 					map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
 							  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
 
-					/* Read the page from the page file */
 					int ret = pf_read_env_page(faulted_env, fault_vva);
 					if (ret == E_PAGE_NOT_EXIST_IN_PF)
 					{
-						/* If page not in PF, check if it's a valid fresh allocation (heap/stack) */
 						if (!((fault_vva >= USER_HEAP_START && fault_vva < USER_HEAP_MAX) ||
 							  (fault_vva >= USTACKBOTTOM && fault_vva < USTACKTOP)))
 						{
-							/* Invalid access */
 							unmap_frame(faulted_env->env_page_directory, fault_vva);
 							env_exit();
 						}
@@ -637,17 +632,14 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, fault_vva);
 					LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
 
-					/* Update page_last_WS_element when WS becomes full after this insertion */
 					if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
 					{
-						/* If the list was not full before, set last to first (or tail) */
 						faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
 					}
 
-					return; /* placement done */
+					return; 
 				}
 
-				/* Replacement scenario: WS is full — pick the page with smallest time_stamp */
 				elem = LIST_FIRST(&(faulted_env->page_WS_list));
 				uint32 min_time = 0xFFFFFFFF;
 
@@ -674,7 +666,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				struct WorkingSetElement *next_victim = LIST_NEXT(victim);
 				uint32 victim_va = victim->virtual_address;
 
-				/* Check if victim is modified and write back if necessary */
 				uint32 *ptr_page_table;
 				struct FrameInfo *victim_frame = get_frame_info(faulted_env->env_page_directory, victim_va, &ptr_page_table);
 				int perms = pt_get_page_permissions(faulted_env->env_page_directory, victim_va);
@@ -684,12 +675,10 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					pf_update_env_page(faulted_env, victim_va, victim_frame);
 				}
 
-				/* Unmap victim's frame and remove from WS list */
 				unmap_frame(faulted_env->env_page_directory, victim_va);
 				LIST_REMOVE(&(faulted_env->page_WS_list), victim);
 				kfree(victim);
 
-				/* Now allocate & map a new frame for the faulting virtual address */
 				uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 				struct FrameInfo *new_frame;
@@ -701,25 +690,20 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				map_frame(faulted_env->env_page_directory, new_frame, fault_vva,
 						  PERM_PRESENT | PERM_WRITEABLE | PERM_USED | PERM_USER);
 
-				/* Read the page from the page file */
 				int ret = pf_read_env_page(faulted_env, fault_vva);
 				if (ret == E_PAGE_NOT_EXIST_IN_PF)
 				{
-					/* If page not in PF, check if it's a valid fresh allocation (heap/stack) */
 					if (!((fault_vva >= USER_HEAP_START && fault_vva < USER_HEAP_MAX) ||
 						  (fault_vva >= USTACKBOTTOM && fault_vva < USTACKTOP)))
 					{
-						/* Invalid access */
 						unmap_frame(faulted_env->env_page_directory, fault_vva);
 						env_exit();
 					}
 				}
 
-				/* Insert the new working-set element at the tail */
 				struct WorkingSetElement *new_elem = env_page_ws_list_create_element(faulted_env, fault_vva);
 				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_elem);
 
-				/* Update page_last_WS_element: follow same logic used elsewhere in your code */
 				if (next_victim != NULL)
 				{
 					faulted_env->page_last_WS_element = next_victim;
@@ -729,7 +713,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
 				}
 
-				/* Done with replacement */
 			}
 			else if (isPageReplacmentAlgorithmModifiedCLOCK())
 			{
@@ -737,7 +720,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// Your code is here
 				// Comment the following line
 
-				// Modified Clock Replacement
 				struct WorkingSetElement *elem = faulted_env->page_last_WS_element;
 
 				if (!elem)
@@ -748,11 +730,10 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				struct WorkingSetElement *victim = NULL;
 				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
 
-				// The algorithm guarantees a victim will be found, so we loop until one is chosen.
+				
 				while (1)
 				{
 					// Trial 1: Search for (Used=0, Modified=0)
-					// We need to save the starting element to know when we've done a full circle
 					struct WorkingSetElement *start_elem = elem;
 
 					for (int i = 0; i < ws_size; i++)
@@ -775,32 +756,26 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						if (!used && !modified)
 						{
 							victim = elem;
-							break; // Found (0,0) - Best Victim
+							break; //(0,0)
 						}
 
-						// Move to next element circularly
+
 						elem = LIST_NEXT(elem);
 						if (!elem)
 							elem = LIST_FIRST(&(faulted_env->page_WS_list));
 					}
 
 					if (victim)
-						break; // Found in Trial 1
+						break; 
 
-					// Trial 2: Search for (Used=0, Modified=1) and reset Used bits
-					// Start from where Trial 1 left off (which is the same as where it started, since it did a full loop)
-					// Actually, the pointer 'elem' should be back at 'start_elem' after the loop if we did exactly ws_size iterations.
-					// Let's ensure we start Trial 2 from the correct position as per algorithm description:
-					// "starts a second circular scan from its starting position" - which is 'start_elem'
-
-					elem = start_elem; // Reset to start of the search
+					//trail 2
+					elem = start_elem; // Reset
 
 					for (int i = 0; i < ws_size; i++)
 					{
 						uint32 vva = ROUNDDOWN(elem->virtual_address, PAGE_SIZE);
 						int perms = pt_get_page_permissions(faulted_env->env_page_directory, vva);
 
-						// Skip if page is not present or page table doesn't exist
 						if (perms == -1 || !(perms & PERM_PRESENT))
 						{
 							elem = LIST_NEXT(elem);
@@ -815,16 +790,15 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						if (!used && modified)
 						{
 							victim = elem;
-							break; // Found (0,1) - Second Best Victim
+							break; // Found (0,1)
 						}
 
-						// Reset Used bit for next trials (give second chance)
+						// make used = 0
 						if (used)
 						{
 							pt_set_page_permissions(faulted_env->env_page_directory, vva, 0, PERM_USED);
 						}
 
-						// Move to next element circularly
 						elem = LIST_NEXT(elem);
 						if (!elem)
 							elem = LIST_FIRST(&(faulted_env->page_WS_list));
@@ -833,95 +807,58 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 					if (victim)
 						break; // Found in Trial 2
 
-					// If we reach here, both trials failed.
-					// The algorithm says: "If both trials complete one full pass without finding a victim,
-					// the algorithm repeats the entire process, starting again with Trial 1."
-					// Since Trial 2 reset Used bits, the next Trial 1 is guaranteed to find something eventually.
-					// We just continue the while(1) loop.
-					// 'elem' is already at the correct position (start_elem) because the loop ran ws_size times.
 					elem = start_elem;
 				}
 
 				// Replacement Logic
-				if (victim)
 				{
 					uint32 victim_vva = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
 
-					// Print perms BEFORE doing anything that may change PTE
+					// Print perms BEFORE doing anything
 					int vperms = pt_get_page_permissions(faulted_env->env_page_directory, victim_vva);
 					// cprintf("DEBUG: (before) victim_vva=%x perms=%x\n", victim_vva, vperms);
 
-					// Get the frame info immediately (must be present)
+					// get the frame info now
 					uint32 *ptr_page_table = NULL;
 					struct FrameInfo *victim_frame = get_frame_info(faulted_env->env_page_directory, victim_vva, &ptr_page_table);
 
-					if (!victim_frame)
-					{
-						// cprintf("DEBUG: victim_frame is NULL for vva=%x; perms now=%x\n", victim_vva, pt_get_page_permissions(faulted_env->env_page_directory, victim_vva));
-						panic("mod clock : cannot get the victim frame");
-					}
-
-					// If modified, write back to page file
+					// If modified write back
 					if (vperms & PERM_MODIFIED)
 					{
 						pf_update_env_page(faulted_env, victim_vva, victim_frame);
 					}
 
-					// Unmap the victim mapping (this may free the frame or decrease refcount)
+					// unmap the victim mapping 
 					unmap_frame(faulted_env->env_page_directory, victim_vva);
 
-					// Now load the needed page at fault_vva
 					uint32 fault_vva = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 					// Allocate a new frame
 					struct FrameInfo *new_frame = NULL;
-					if (allocate_frame(&new_frame) != 0)
-					{
-						panic("Modified Clock: Failed to allocate frame!");
-					}
 
-					// Map the new frame
-					if (map_frame(faulted_env->env_page_directory, new_frame, fault_vva, PERM_PRESENT | PERM_WRITEABLE | PERM_USER | PERM_USED) != 0)
-					{
-						panic("Modified Clock: Failed to map frame!");
-					}
-
-					// Read from page file
 					int read_page = pf_read_env_page(faulted_env, fault_vva);
 					if (read_page == E_PAGE_NOT_EXIST_IN_PF)
 					{
 						if (!((fault_vva >= USER_HEAP_START && fault_vva < USER_HEAP_MAX) ||
 							  (fault_vva >= USTACKBOTTOM && fault_vva < USTACKTOP)))
 						{
-							// cprintf("ya lahwaaaaaaay\n");
-							// Unmap and exit if invalid
 							unmap_frame(faulted_env->env_page_directory, fault_vva);
 							env_exit();
 						}
-						else
-						{
-							// page not exist but within heap/stack range: it's a fresh page.
-							// We already mapped it. We might want to zero it.
-							// memset((void*)fault_vva, 0, PAGE_SIZE);
-						}
+
 					}
 
-					// Reuse victim element: update its virtual address to the new mapped page
+
 					victim->virtual_address = fault_vva;
 
-					// Set last_WS_element to the element after the victim (circular)
+
 					struct WorkingSetElement *after = LIST_NEXT(victim);
 					if (!after)
 						after = LIST_FIRST(&(faulted_env->page_WS_list));
 					faulted_env->page_last_WS_element = after;
 
-					// cprintf("DEBUG: replaced victim %x with %x, last_ws set to %x\n", victim_vva, fault_vva, (after? after->virtual_address:0));
 				}
-				else
-				{
-					// This should be unreachable due to the while(1) loop and algorithm guarantees
-					panic("Modified_Clock No victim found! This should not happen.");
-				}
+
 			}
 		}
 	}
