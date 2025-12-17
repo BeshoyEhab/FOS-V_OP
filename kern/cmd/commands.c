@@ -30,6 +30,8 @@ struct Command commands[] =
 	{
 		// TODO: LAB2 Hands-on: add the commands here================
 
+		{"SayMyName", "team info", command_say_my_name, 0},
+
 		//==========================================================
 
 		//*******************************//
@@ -192,6 +194,18 @@ int command_readmem_k(int number_of_arguments, char **arguments)
 // Lab2.Hands.On
 //=============
 // TODO: LAB2 Hands-on: write the command function here
+
+int command_say_my_name(int number_of_arguments, char **arguments)
+{
+	cprintf("Team Members:\n");
+	cprintf("1. Ahmed Mohamed Khalaf\n");
+	cprintf("2. Adham Mohamed Fares\n");
+	cprintf("3. Bishoy Ehab\n");
+	cprintf("4. Omar Nasr \n");
+	cprintf("5. Hisham Mohamed Ali\n");
+	cprintf("6. Soliman Emam\n");
+	return 0;
+}
 
 //===========================================================================
 // Lab3.Examples

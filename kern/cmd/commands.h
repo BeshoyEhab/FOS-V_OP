@@ -41,6 +41,7 @@ int command_cls(int number_of_arguments, char **arguments);
 //Lab2.Hands.On
 //=============
 //TODO: Lab2.Hands.On: declare the command function here
+int command_say_my_name(int number_of_arguments, char **arguments);
 
 
 //LAB3.Examples
