@@ -244,7 +244,6 @@ void merge_free_segments(struct uheapPageSegment *segment)
 		}
 	}
 
-
 	if (found_prev && found_next)
 	{
 		prev_seg->pageCount += segment->pageCount + next_seg->pageCount;
@@ -274,6 +273,7 @@ void merge_free_segments(struct uheapPageSegment *segment)
 
 void free_segment_struct(struct uheapPageSegment *seg)
 {
+	// Safety check
 	if (seg == NULL)
 		return;
 
